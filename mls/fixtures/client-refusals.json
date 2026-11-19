@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "about": "The one-way client refusals (mls/core/src/client_refusals.rs). `refusals` is every name this build can be told to switch on, its compiled default, and the constant it ORs into. A client holds what it held plus every name the server lists that it knows; it never drops one. Replayed through the fixture door by every binding, and natively by each app.",
+  "refusals": [
+    {
+      "name": "own_seat_check",
+      "compiledDefault": false,
+      "drives": "OWN_SEAT_CHECK (each app)"
+    },
+    {
+      "name": "signed_revocations",
+      "compiledDefault": false,
+      "drives": "SIGNED_REVOCATIONS_ENFORCED (mls/core)"
+    }
+  ],
+  "cases": [
+    {
+      "id": "table",
+      "kind": "client_refusals",
+      "call": "table",
+      "why": "The names this build knows and their compiled defaults are the fixture's own table.",
+      "expect": {
+        "refusals": [
+          { "name": "own_seat_check", "compiledDefault": false },
+          { "name": "signed_revocations", "compiledDefault": false }
+        ]
+      }
+    },
+    {
+      "id": "nothing-held-nothing-served",
+      "kind": "client_refusals",
+      "call": "ratchet",
+      "why": "A fresh install the server tells nothing holds nothing.",
+      "held": [],
+      "served": [],
+      "expect": { "held": [] }
+    },
+    {
+      "id": "a-served-name-is-held",
+      "kind": "client_refusals",
+      "call": "ratchet",
+      "why": "A name the server lists, which this build knows, is held from then on.",
+      "held": [],
+      "served": ["own_seat_check"],
+      "expect": { "held": ["own_seat_check"] }
+    },
+    {
+      "id": "grows-only",
+      "kind": "client_refusals",
+      "call": "ratchet",
+      "why": "A second name joins the first; the result is sorted.",
+      "held": ["signed_revocations"],
+      "served": ["own_seat_check"],
+      "expect": { "held": ["own_seat_check", "signed_revocations"] }
+    },
+    {
+      "id": "a-dropped-name-stays",
+      "kind": "client_refusals",
+      "call": "ratchet",
+      "why": "The server leaves out a name it listed before: the client keeps it, so a server can never turn a refusal back off.",
+      "held": ["own_seat_check", "signed_revocations"],
+      "served": [],
+      "expect": { "held": ["own_seat_check", "signed_revocations"] }
+    },
+    {
+      "id": "an-unknown-name-is-ignored",
+      "kind": "client_refusals",
+      "call": "ratchet",
+      "why": "A name added after this build means nothing to it and is not kept.",
+      "held": [],
+      "served": ["refuses_something_new", "own_seat_check"],
+      "expect": { "held": ["own_seat_check"] }
+    },
+    {
+      "id": "duplicates-and-spaces",
+      "kind": "client_refusals",
+      "call": "ratchet",
+      "why": "A name listed twice, or with spaces around it, is one name.",
+      "held": ["own_seat_check"],
+      "served": [" own_seat_check ", "own_seat_check", ""],
+      "expect": { "held": ["own_seat_check"] }
+    },
+    {
+      "id": "a-held-name-from-a-newer-build-is-kept",
+      "kind": "client_refusals",
+      "call": "ratchet",
+      "why": "A name a newer build of this install held is kept, unread, so going back and forward again loses nothing.",
+      "held": ["refuses_something_new"],
+      "served": [],
+      "expect": { "held": ["refuses_something_new"] }
+    },
+    {
+      "id": "off-when-not-held",
+      "kind": "client_refusals",
+      "call": "on",
+      "why": "A refusal compiled off and not held is off.",
+      "name": "own_seat_check",
+      "held": [],
+      "expect": { "on": false }
+    },
+    {
+      "id": "on-when-held",
+      "kind": "client_refusals",
+      "call": "on",
+      "why": "A held refusal is on.",
+      "name": "signed_revocations",
+      "held": ["signed_revocations"],
+      "expect": { "on": true }
+    },
+    {
+      "id": "an-unknown-name-is-never-on",
+      "kind": "client_refusals",
+      "call": "on",
+      "why": "No code of this build reads a name it does not know.",
+      "name": "refuses_something_new",
+      "held": ["refuses_something_new"],
+      "expect": { "on": false }
+    }
+  ]
+}

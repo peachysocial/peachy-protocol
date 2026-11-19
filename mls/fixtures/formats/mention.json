@@ -1,0 +1,150 @@
+{
+  "_about": [
+    "Golden cases for how a sender resolves mentions into a frame's `m` (people) and `ma` (everyone).",
+    "Normative: docs/sealed-messages.md §Keys of a frame (keys `m` and `ma`).",
+    "The spec requires only that `m` be resolved by the sender against the roster. This table pins how the official clients do it, and a sender SHOULD match it so that every client highlights the same names.",
+    "A handle is `[a-z0-9_]{3,30}` after `@`, matched case-insensitively, not preceded by `[a-z0-9_@/]` and not followed by `[a-z0-9_]`. Handles are lowercased, deduplicated, kept in body order and capped at 10 people. Only members of the conversation resolve.",
+    "`@all` sets `everyone` in a group and is plain text in a two-person conversation. It never appears in `mentions`.",
+    "`roster` is the conversation's members as {id, handle}. Each `resolve` case gives a `body` and `isGroup`, and `expect` gives `mentions` as [{userId, handle}] (the frame's `u` and `h`) and `everyone`.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "roster": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "handle": "ava_shore"
+    },
+    {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "handle": "ben"
+    },
+    {
+      "id": "33333333-3333-4333-8333-333333333333",
+      "handle": "cleo99"
+    }
+  ],
+  "resolve": [
+    {
+      "name": "one member by handle",
+      "body": "hey @ava_shore look",
+      "isGroup": true,
+      "expect": {
+        "mentions": [
+          {
+            "userId": "11111111-1111-4111-8111-111111111111",
+            "handle": "ava_shore"
+          }
+        ],
+        "everyone": false
+      }
+    },
+    {
+      "name": "case-insensitive, lowercased, deduplicated, in body order",
+      "body": "@Ben and @ava_shore, @BEN again",
+      "isGroup": true,
+      "expect": {
+        "mentions": [
+          {
+            "userId": "22222222-2222-4222-8222-222222222222",
+            "handle": "ben"
+          },
+          {
+            "userId": "11111111-1111-4111-8111-111111111111",
+            "handle": "ava_shore"
+          }
+        ],
+        "everyone": false
+      }
+    },
+    {
+      "name": "@all in a group is everyone and names nobody",
+      "body": "@all dinner at 8",
+      "isGroup": true,
+      "expect": {
+        "mentions": [],
+        "everyone": true
+      }
+    },
+    {
+      "name": "@ALL is @all",
+      "body": "ok @ALL",
+      "isGroup": true,
+      "expect": {
+        "mentions": [],
+        "everyone": true
+      }
+    },
+    {
+      "name": "@all in a DM is just text",
+      "body": "@all dinner at 8",
+      "isGroup": false,
+      "expect": {
+        "mentions": [],
+        "everyone": false
+      }
+    },
+    {
+      "name": "@all beside a handle",
+      "body": "@all esp. @cleo99",
+      "isGroup": true,
+      "expect": {
+        "mentions": [
+          {
+            "userId": "33333333-3333-4333-8333-333333333333",
+            "handle": "cleo99"
+          }
+        ],
+        "everyone": true
+      }
+    },
+    {
+      "name": "a handle that is not in the chat is text",
+      "body": "@stranger hi",
+      "isGroup": true,
+      "expect": {
+        "mentions": [],
+        "everyone": false
+      }
+    },
+    {
+      "name": "a profile link names nobody",
+      "body": "see x.com/@ben and pchy.app/@all",
+      "isGroup": true,
+      "expect": {
+        "mentions": [],
+        "everyone": false
+      }
+    },
+    {
+      "name": "a longer word starting with a handle is not that handle",
+      "body": "@allison @benny",
+      "isGroup": true,
+      "expect": {
+        "mentions": [],
+        "everyone": false
+      }
+    },
+    {
+      "name": "a DM still resolves the other person's handle",
+      "body": "thanks @ben",
+      "isGroup": false,
+      "expect": {
+        "mentions": [
+          {
+            "userId": "22222222-2222-4222-8222-222222222222",
+            "handle": "ben"
+          }
+        ],
+        "everyone": false
+      }
+    },
+    {
+      "name": "no @ at all",
+      "body": "hello everyone",
+      "isGroup": true,
+      "expect": {
+        "mentions": [],
+        "everyone": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,272 @@
+{
+  "_about": [
+    "Golden cases for the security code: the 60-digit code and the QR text two people compare, and the verified state.",
+    "Normative: docs/identity.md §Computing it.",
+    "The verified state: docs/identity.md §Verified.",
+    "`iterations` is the number of SHA-512 calls, `version` the QR payload's version and `qrPrefix` the QR text's prefix.",
+    "Each `pairs` case is from `local`'s side: each party's `actorId` and `accountKeyHex`, local's `idHex` (the actor id's 16 bytes) and `fingerprintHex` (the full hash), the code as `digits` and `groups`, `localScannableHex` (the protobuf bytes behind local's QR), `localQr` (the text in local's QR) and `remoteQr` (the text in the other party's).",
+    "`changedKey` is the second party's key after they started their identity over, and the new `digits` the first party now sees for them.",
+    "Each `compare` case scans `scanned` with the first party's code for the pair and gives `result`: `match`, `mismatch`, `version` (a version mismatch) or `invalid`.",
+    "Each `verification` case reads a contact record's `verifiedKey` (base64, or null) against the key their conversations carry now (`currentKeyHex`) and gives `state`.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "iterations": 5200,
+  "version": 1,
+  "qrPrefix": "peachy-sc:",
+  "pairs": [
+    {
+      "name": "alice and bob",
+      "local": {
+        "actorId": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+        "accountKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "idHex": "5b0f5a528a554a5b9d591b9a7a3f0c11",
+        "fingerprintHex": "9a07932735e00c504a572856c67c0568860bc092be5a3c0ba4c624632782da4575ba5a2159647d909ff9c50a5c71c2f40c55776465d728192793f3da0c2ee601"
+      },
+      "remote": {
+        "actorId": "0f3c6d2e-1111-4222-8333-944455556666",
+        "accountKeyHex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+      },
+      "digits": "479256280740293159227082002562720675139223695430330083151400",
+      "groups": [
+        "47925",
+        "62807",
+        "40293",
+        "15922",
+        "70820",
+        "02562",
+        "72067",
+        "51392",
+        "23695",
+        "43033",
+        "00831",
+        "51400"
+      ],
+      "localScannableHex": "080112220a209a07932735e00c504a572856c67c0568860bc092be5a3c0ba4c624632782da451a220a20c30d4e83c303731c8760d6b2aa8faf5660391c79275cde5b7f1f80c615480518",
+      "localQr": "peachy-sc:CAESIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kUaIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRg",
+      "remoteQr": "peachy-sc:CAESIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRgaIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kU"
+    },
+    {
+      "name": "alice and carol",
+      "local": {
+        "actorId": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+        "accountKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "idHex": "5b0f5a528a554a5b9d591b9a7a3f0c11",
+        "fingerprintHex": "9a07932735e00c504a572856c67c0568860bc092be5a3c0ba4c624632782da4575ba5a2159647d909ff9c50a5c71c2f40c55776465d728192793f3da0c2ee601"
+      },
+      "remote": {
+        "actorId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+        "accountKeyHex": "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025"
+      },
+      "digits": "148819966072147404107680654917479256280740293159227082002562",
+      "groups": [
+        "14881",
+        "99660",
+        "72147",
+        "40410",
+        "76806",
+        "54917",
+        "47925",
+        "62807",
+        "40293",
+        "15922",
+        "70820",
+        "02562"
+      ],
+      "localScannableHex": "080112220a209a07932735e00c504a572856c67c0568860bc092be5a3c0ba4c624632782da451a220a20fe8f3519013b0f580eccc1c2001013c8dc76ec1a912f0f1a26bbcc5bd5c5b53c",
+      "localQr": "peachy-sc:CAESIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kUaIgog_o81GQE7D1gOzMHCABATyNx27BqRLw8aJrvMW9XFtTw",
+      "remoteQr": "peachy-sc:CAESIgog_o81GQE7D1gOzMHCABATyNx27BqRLw8aJrvMW9XFtTwaIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kU"
+    },
+    {
+      "name": "bob and carol",
+      "local": {
+        "actorId": "0f3c6d2e-1111-4222-8333-944455556666",
+        "accountKeyHex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+        "idHex": "0f3c6d2e111142228333944455556666",
+        "fingerprintHex": "c30d4e83c303731c8760d6b2aa8faf5660391c79275cde5b7f1f80c6154805184418b7a6bdf407c6db908cbed10f935d1e03849661b93d640901be5f2dc57f10"
+      },
+      "remote": {
+        "actorId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+        "accountKeyHex": "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025"
+      },
+      "digits": "148819966072147404107680654917720675139223695430330083151400",
+      "groups": [
+        "14881",
+        "99660",
+        "72147",
+        "40410",
+        "76806",
+        "54917",
+        "72067",
+        "51392",
+        "23695",
+        "43033",
+        "00831",
+        "51400"
+      ],
+      "localScannableHex": "080112220a20c30d4e83c303731c8760d6b2aa8faf5660391c79275cde5b7f1f80c6154805181a220a20fe8f3519013b0f580eccc1c2001013c8dc76ec1a912f0f1a26bbcc5bd5c5b53c",
+      "localQr": "peachy-sc:CAESIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRgaIgog_o81GQE7D1gOzMHCABATyNx27BqRLw8aJrvMW9XFtTw",
+      "remoteQr": "peachy-sc:CAESIgog_o81GQE7D1gOzMHCABATyNx27BqRLw8aJrvMW9XFtTwaIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRg"
+    }
+  ],
+  "changedKey": {
+    "remote": {
+      "actorId": "0f3c6d2e-1111-4222-8333-944455556666",
+      "accountKeyHex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+    },
+    "digits": "047090072121951585613524523966479256280740293159227082002562"
+  },
+  "compare": [
+    {
+      "name": "their QR, scanned off their screen, matches",
+      "scanned": "peachy-sc:CAESIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRgaIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kU",
+      "result": "match"
+    },
+    {
+      "name": "my own QR, scanned off my own screen, does not",
+      "scanned": "peachy-sc:CAESIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kUaIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRg",
+      "result": "mismatch"
+    },
+    {
+      "name": "bob's code under a new key does not match alice's copy of the old one",
+      "scanned": "peachy-sc:CAESIgogBpx99wWJrJuj0T1T--Q_dfyiJcFR2iPgTet-TYR-YBkaIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kU",
+      "result": "mismatch"
+    },
+    {
+      "name": "carol's code with bob is not alice's with bob",
+      "scanned": "peachy-sc:CAESIgog_o81GQE7D1gOzMHCABATyNx27BqRLw8aJrvMW9XFtTwaIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRg",
+      "result": "mismatch"
+    },
+    {
+      "name": "whitespace around the text is ignored",
+      "scanned": "  peachy-sc:CAESIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRgaIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kU\n",
+      "result": "match"
+    },
+    {
+      "name": "a URL is not a security code",
+      "scanned": "https://pchy.app/",
+      "result": "invalid"
+    },
+    {
+      "name": "the prefix alone is not a security code",
+      "scanned": "peachy-sc:",
+      "result": "invalid"
+    },
+    {
+      "name": "base64url that is not the protobuf",
+      "scanned": "peachy-sc:AAAA",
+      "result": "invalid"
+    },
+    {
+      "name": "characters outside base64url",
+      "scanned": "peachy-sc:CAESIgogww1Og8MDcxyHYNayqo-vVm+/",
+      "result": "invalid"
+    },
+    {
+      "name": "a later version",
+      "scanned": "peachy-sc:CAISIgogww1Og8MDcxyHYNayqo-vVmA5HHknXN5bfx-AxhVIBRgaIgogmgeTJzXgDFBKVyhWxnwFaIYLwJK-WjwLpMYkYyeC2kU",
+      "result": "version"
+    },
+    {
+      "name": "their QR's raw protobuf bytes, without the peachy-sc: text form, are not a security code",
+      "scanned": "\b\u0001\u0012\"\n Ã\rNÃ\u0003s\u001c`Ö²ª¯V`9\u001cy'\\Þ[\u001fÆ\u0015H\u0005\u0018\u001a\"\n \u0007'5à\fPJW(VÆ|\u0005h\u000bÀ¾Z<\u000b¤Æ$c'ÚE",
+      "result": "invalid"
+    }
+  ],
+  "verification": [
+    {
+      "name": "never verified",
+      "verifiedKey": null,
+      "currentKeyHex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "state": "default"
+    },
+    {
+      "name": "verified this key",
+      "verifiedKey": "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=",
+      "currentKeyHex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "state": "verified"
+    },
+    {
+      "name": "verified, then the key changed",
+      "verifiedKey": "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=",
+      "currentKeyHex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "state": "unverified"
+    },
+    {
+      "name": "verified, and this device has not seen their key yet",
+      "verifiedKey": "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=",
+      "currentKeyHex": null,
+      "state": "verified"
+    },
+    {
+      "name": "never verified, key not seen",
+      "verifiedKey": null,
+      "currentKeyHex": null,
+      "state": "default"
+    },
+    {
+      "name": "continued past this key",
+      "verifiedKey": null,
+      "acceptedKeys": [
+        "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+      ],
+      "currentKeyHex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "state": "default"
+    },
+    {
+      "name": "continued past one key, then it changed again",
+      "verifiedKey": null,
+      "acceptedKeys": [
+        "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw="
+      ],
+      "currentKeyHex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "state": "unverified"
+    },
+    {
+      "name": "continued, and this device has not seen their key yet",
+      "verifiedKey": null,
+      "acceptedKeys": [
+        "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw="
+      ],
+      "currentKeyHex": null,
+      "state": "default"
+    },
+    {
+      "name": "verified wins over an older Continue",
+      "verifiedKey": "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=",
+      "acceptedKeys": [
+        "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+      ],
+      "currentKeyHex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "state": "verified"
+    },
+    {
+      "name": "verified then changed: an older Continue on the new key does not lift it",
+      "verifiedKey": "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=",
+      "acceptedKeys": [
+        "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+      ],
+      "currentKeyHex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "state": "unverified"
+    },
+    {
+      "name": "continued past both keys of a reinstall: the old one",
+      "verifiedKey": null,
+      "acceptedKeys": [
+        "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=",
+        "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+      ],
+      "currentKeyHex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "state": "default"
+    },
+    {
+      "name": "continued past both keys of a reinstall: the new one",
+      "verifiedKey": null,
+      "acceptedKeys": [
+        "PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=",
+        "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w="
+      ],
+      "currentKeyHex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "state": "default"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+(* SPDX-License-Identifier: MIT *)
+(* forward_secrecy_control.pv: forward_secrecy.pv with the deletion skipped.
+
+   The negative control. It is the same run, except that the seized device
+   still holds epoch 1's call key, as a client would if its key ring never
+   evicted the previous epoch after the grace window.
+
+   Expected: epoch-1 media is NOT secret. This proves that forward_secrecy.pv
+   holds only because of the deletion, so a client that keeps old call keys
+   loses the property. *)
+
+free es1: key [private].
+free gid: bitstring.
+free cid: bitstring.
+free leafA1, leafB1, leafA2: hskey [private].
+free sigA, sigB: sskey [private].
+free cs2: key [private].
+free mA1: bitstring [private].
+
+(* Expected FALSE. *)
+query attacker(mA1).
+
+process
+  out(net, (hpk(leafA1), hpk(leafB1), spk(sigA), spk(sigB)));
+  (
+      FrameSender(E1, es1, cid, LEAF_A, mA1)
+    | (
+        let es2 = next_epoch(init_secret(es1), cs2) in
+        let body = (E2, hpke_seal(hpk(leafB1), cs2), hpk(leafA2)) in
+        out(net, (body, sign(sigA, body)));
+        phase 1;
+        (* the device kept epoch 1's frame key in its ring *)
+        out(net, (es2, leafA2, leafB1, sigA, sigB, frame_key_of(es1, cid, LEAF_A)))
+      )
+  )

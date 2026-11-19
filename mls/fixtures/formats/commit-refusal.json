@@ -1,0 +1,777 @@
+{
+  "_about": [
+    "Golden cases for what a device does when SubmitCommit refuses its commit, or fails without an answer.",
+    "Normative: docs/delivery.md §A commit the server refuses.",
+    "A lost answer: docs/delivery.md §SubmitCommit (A submit whose answer was lost).",
+    "`verdicts`: one refusal each. `code` is the Connect code in its wire spelling. `localEpoch` is this device's epoch after clearing the refused commit; `headEpoch` the server's head epoch from FetchConversationHead, or null for no head; `verifierMatches` whether SHA-256 of this device's send key equals the head's verifier, or null when the head carried none. `headPassedThrough` (absent: false) is whether the head, below this device's epoch, is one its copy came through (`head_rolled_back` in mls/core): the group's own head once stood above it on this copy (a head read naming the copy there, a seat at such a head, or a merge of the device's own commit, never a commit merely placed for it), it names the send key the copy had there when that epoch is among the copy's last 64, and below them the copy has kept 64 epochs since its seat and opened a stamp since then, every stamp it opened named no steward key, and it counts and keeps none. `verdict` is `retry`, `behind`, `forked` or `rolledBack` (keep the copy: neither forget the group nor ask back in).",
+    "Only `checkedCodes` are worth reading the head for; any other code is `retry`.",
+    "`commitsTaken`: a submit that failed without an answer, and whether the server took it anyway. `commitEpoch` is the epoch the commit was built at, `headEpoch` the head's afterwards (null for none), and `headVerifierIsNext` whether the head's verifier is the one this commit would have set (null when the head carried none). `taken` true means merge the staged commit instead of clearing it.",
+    "`stuckBehind`: one group's `behind` verdicts in order, each at `atMs` with this device's `localEpoch`; `stuck` is whether that verdict strands the device. A `clear` event resets the count, as any other verdict or a rejoin does. `lastDrainStartedAtMs`, when present, is when the last complete mailbox drain began. `stuckBehindMs`, `stuckBehindChecks` and `stuckBehindWindowMs` are the constants.",
+    "`forkRejoinDelays`: how long a group rejoined over a fork waits before another fork may rejoin it, by rejoins so far. `forkRejoins`: one group's events in order; `rejoinedAt` records a rejoin and `checkAt` asks whether one may go ahead then (`may`). `forkRejoinFirstMs` and `forkRejoinCapMs` are the constants.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "stuckBehindMs": 300000,
+  "stuckBehindChecks": 3,
+  "stuckBehindWindowMs": 1800000,
+  "checkedCodes": [
+    "failed_precondition",
+    "permission_denied"
+  ],
+  "forkRejoinFirstMs": 600000,
+  "forkRejoinCapMs": 21600000,
+  "verdicts": [
+    {
+      "name": "the network dropped the call",
+      "code": "unavailable",
+      "localEpoch": 5,
+      "headEpoch": 5,
+      "verifierMatches": false,
+      "verdict": "retry"
+    },
+    {
+      "name": "the meter said slow down",
+      "code": "resource_exhausted",
+      "localEpoch": 5,
+      "headEpoch": 4,
+      "verifierMatches": false,
+      "verdict": "retry"
+    },
+    {
+      "name": "a malformed request is this build's bug, not a fork",
+      "code": "invalid_argument",
+      "localEpoch": 5,
+      "headEpoch": 5,
+      "verifierMatches": false,
+      "verdict": "retry"
+    },
+    {
+      "name": "no head for the handle",
+      "code": "not_found",
+      "localEpoch": 5,
+      "headEpoch": null,
+      "verifierMatches": null,
+      "verdict": "retry"
+    },
+    {
+      "name": "lost the race: another member's commit is waiting in the mailbox",
+      "code": "failed_precondition",
+      "localEpoch": 5,
+      "headEpoch": 6,
+      "verifierMatches": null,
+      "verdict": "behind"
+    },
+    {
+      "name": "lost the race and already caught up: same epoch, same tree",
+      "code": "failed_precondition",
+      "localEpoch": 6,
+      "headEpoch": 6,
+      "verifierMatches": true,
+      "verdict": "retry"
+    },
+    {
+      "name": "ahead of the arbiter: merged a commit it never took",
+      "code": "failed_precondition",
+      "localEpoch": 7,
+      "headEpoch": 6,
+      "verifierMatches": null,
+      "verdict": "forked"
+    },
+    {
+      "name": "same epoch, another tree, refused on the epoch after a race",
+      "code": "failed_precondition",
+      "localEpoch": 6,
+      "headEpoch": 6,
+      "verifierMatches": false,
+      "verdict": "forked"
+    },
+    {
+      "name": "same epoch, and the send key is not the head's",
+      "code": "permission_denied",
+      "localEpoch": 3,
+      "headEpoch": 3,
+      "verifierMatches": false,
+      "verdict": "forked"
+    },
+    {
+      "name": "refused for a recipient's access key: the tree is the head's",
+      "code": "permission_denied",
+      "localEpoch": 3,
+      "headEpoch": 3,
+      "verifierMatches": true,
+      "verdict": "retry"
+    },
+    {
+      "name": "refused, and the head has moved on since",
+      "code": "permission_denied",
+      "localEpoch": 3,
+      "headEpoch": 4,
+      "verifierMatches": null,
+      "verdict": "behind"
+    },
+    {
+      "name": "the arbiter holds no head",
+      "code": "permission_denied",
+      "localEpoch": 3,
+      "headEpoch": null,
+      "verifierMatches": null,
+      "verdict": "retry"
+    },
+    {
+      "name": "a head with no verifier proves nothing at the same epoch",
+      "code": "permission_denied",
+      "localEpoch": 3,
+      "headEpoch": 3,
+      "verifierMatches": null,
+      "verdict": "retry"
+    },
+    {
+      "name": "ahead of the arbiter needs no verifier",
+      "code": "permission_denied",
+      "localEpoch": 9,
+      "headEpoch": 3,
+      "verifierMatches": null,
+      "verdict": "forked"
+    },
+    {
+      "name": "the head moved back to the epoch before this copy's, under the key the copy had there",
+      "code": "failed_precondition",
+      "localEpoch": 7,
+      "headEpoch": 6,
+      "verifierMatches": false,
+      "headPassedThrough": true,
+      "verdict": "rolledBack"
+    },
+    {
+      "name": "the head moved back many epochs, to one the copy held",
+      "code": "permission_denied",
+      "localEpoch": 9,
+      "headEpoch": 3,
+      "verifierMatches": null,
+      "headPassedThrough": true,
+      "verdict": "rolledBack"
+    },
+    {
+      "name": "a head below the copy under a key it never held is a fork",
+      "code": "failed_precondition",
+      "localEpoch": 7,
+      "headEpoch": 6,
+      "verifierMatches": false,
+      "headPassedThrough": false,
+      "verdict": "forked"
+    },
+    {
+      "name": "a rolled-back head after a network failure is never read",
+      "code": "unavailable",
+      "localEpoch": 7,
+      "headEpoch": 6,
+      "verifierMatches": false,
+      "headPassedThrough": true,
+      "verdict": "retry"
+    },
+    {
+      "name": "passed-through says nothing at the copy's own epoch",
+      "code": "failed_precondition",
+      "localEpoch": 6,
+      "headEpoch": 6,
+      "verifierMatches": false,
+      "headPassedThrough": true,
+      "verdict": "forked"
+    },
+    {
+      "name": "passed-through says nothing about a head above the copy",
+      "code": "failed_precondition",
+      "localEpoch": 5,
+      "headEpoch": 6,
+      "verifierMatches": null,
+      "headPassedThrough": true,
+      "verdict": "behind"
+    }
+  ],
+  "commitsTaken": [
+    {
+      "name": "the answer was lost, and the head is this commit",
+      "commitEpoch": 4,
+      "headEpoch": 5,
+      "headVerifierIsNext": true,
+      "taken": true
+    },
+    {
+      "name": "another member won the epoch",
+      "commitEpoch": 4,
+      "headEpoch": 5,
+      "headVerifierIsNext": false,
+      "taken": false
+    },
+    {
+      "name": "the head never moved",
+      "commitEpoch": 4,
+      "headEpoch": 4,
+      "headVerifierIsNext": false,
+      "taken": false
+    },
+    {
+      "name": "the head moved on past it",
+      "commitEpoch": 4,
+      "headEpoch": 6,
+      "headVerifierIsNext": false,
+      "taken": false
+    },
+    {
+      "name": "a verifier match two epochs on is not this commit",
+      "commitEpoch": 4,
+      "headEpoch": 6,
+      "headVerifierIsNext": true,
+      "taken": false
+    },
+    {
+      "name": "no head",
+      "commitEpoch": 4,
+      "headEpoch": null,
+      "headVerifierIsNext": null,
+      "taken": false
+    },
+    {
+      "name": "a head with no verifier proves nothing",
+      "commitEpoch": 4,
+      "headEpoch": 5,
+      "headVerifierIsNext": null,
+      "taken": false
+    },
+    {
+      "name": "the head moved on past it, and the log at the next epoch is this commit",
+      "commitEpoch": 4,
+      "headEpoch": 9,
+      "headVerifierIsNext": false,
+      "loggedVerifierIsNext": true,
+      "taken": true
+    },
+    {
+      "name": "the head moved on past it, and the log at the next epoch is another commit",
+      "commitEpoch": 4,
+      "headEpoch": 9,
+      "headVerifierIsNext": false,
+      "loggedVerifierIsNext": false,
+      "taken": false
+    },
+    {
+      "name": "the head moved on past it, and the log could not be read",
+      "commitEpoch": 4,
+      "headEpoch": 9,
+      "headVerifierIsNext": false,
+      "loggedVerifierIsNext": null,
+      "taken": false
+    },
+    {
+      "name": "one past it, the head decides and a log answer does not",
+      "commitEpoch": 4,
+      "headEpoch": 5,
+      "headVerifierIsNext": false,
+      "loggedVerifierIsNext": true,
+      "taken": false
+    },
+    {
+      "name": "the head below the commit's next epoch, a log answer proves nothing",
+      "commitEpoch": 4,
+      "headEpoch": 4,
+      "headVerifierIsNext": false,
+      "loggedVerifierIsNext": true,
+      "taken": false
+    }
+  ],
+  "stuckBehind": [
+    {
+      "name": "one behind is a race",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "three checks over five minutes at one epoch strand it",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 60000,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 300000,
+          "localEpoch": 4,
+          "stuck": true
+        }
+      ]
+    },
+    {
+      "name": "many checks inside five minutes are not enough",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 1000,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 2000,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 299999,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 300000,
+          "localEpoch": 4,
+          "stuck": true
+        }
+      ]
+    },
+    {
+      "name": "two checks however far apart are not enough",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 9000000,
+          "localEpoch": 4,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "catching up an epoch starts over",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 200000,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 300000,
+          "localEpoch": 5,
+          "stuck": false
+        },
+        {
+          "atMs": 400000,
+          "localEpoch": 5,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "an old reading does not count toward a new run",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 1800001,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 1860000,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 2100001,
+          "localEpoch": 4,
+          "stuck": true
+        }
+      ]
+    },
+    {
+      "name": "the head at N+1, a whole drain since, and still at N",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 8,
+          "stuck": false
+        },
+        {
+          "atMs": 2000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": 1000,
+          "stuck": true
+        }
+      ]
+    },
+    {
+      "name": "the drain carried it up: a new epoch starts over",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 8,
+          "stuck": false
+        },
+        {
+          "atMs": 2000,
+          "localEpoch": 9,
+          "lastDrainStartedAtMs": 1000,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "a drain that began before the last reading proves nothing",
+      "events": [
+        {
+          "atMs": 1000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": 500,
+          "stuck": false
+        },
+        {
+          "atMs": 2000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": 1000,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "a drain since the first reading, not since the last, proves nothing",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 8,
+          "stuck": false
+        },
+        {
+          "atMs": 2000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": 1000,
+          "stuck": true
+        },
+        {
+          "clear": true
+        },
+        {
+          "atMs": 3000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": 1000,
+          "stuck": false
+        },
+        {
+          "atMs": 4000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": 1000,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "the first reading never strands, however recent the drain",
+      "events": [
+        {
+          "atMs": 2000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": 1999,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "no drain at all keeps the clock rule",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": null,
+          "stuck": false
+        },
+        {
+          "atMs": 1000,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": null,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "another verdict in between starts over",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "atMs": 200000,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "clear": true
+        },
+        {
+          "atMs": 300000,
+          "localEpoch": 4,
+          "stuck": false
+        }
+      ]
+    },
+    {
+      "name": "a copy seated on a vetoed branch, the head past it: read again after a whole drain, and stranded",
+      "events": [
+        {
+          "atMs": 1000,
+          "localEpoch": 11,
+          "stuck": false
+        },
+        {
+          "drainCompleteStartedAtMs": 1000,
+          "recheck": false
+        },
+        {
+          "drainCompleteStartedAtMs": 60000,
+          "recheck": true
+        },
+        {
+          "drainCompleteStartedAtMs": 90000,
+          "recheck": false
+        },
+        {
+          "atMs": 120000,
+          "localEpoch": 11,
+          "lastDrainStartedAtMs": 90000,
+          "stuck": true
+        },
+        {
+          "drainCompleteStartedAtMs": 150000,
+          "recheck": false
+        }
+      ]
+    },
+    {
+      "name": "a reading that settles owes no second one",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 4,
+          "stuck": false
+        },
+        {
+          "clear": true
+        },
+        {
+          "drainCompleteStartedAtMs": 1000,
+          "recheck": false
+        }
+      ]
+    },
+    {
+      "name": "a reading taken while a drain ran owes the drain after it",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 8,
+          "stuck": false
+        },
+        {
+          "atMs": 1500,
+          "localEpoch": 8,
+          "lastDrainStartedAtMs": null,
+          "stuck": false
+        },
+        {
+          "drainCompleteStartedAtMs": 1000,
+          "recheck": false
+        },
+        {
+          "drainCompleteStartedAtMs": 2000,
+          "recheck": true
+        }
+      ]
+    },
+    {
+      "name": "a device truly behind owes a reading after each drain it reads behind across",
+      "events": [
+        {
+          "atMs": 0,
+          "localEpoch": 8,
+          "stuck": false
+        },
+        {
+          "drainCompleteStartedAtMs": 500,
+          "recheck": true
+        },
+        {
+          "atMs": 2000,
+          "localEpoch": 9,
+          "lastDrainStartedAtMs": 500,
+          "stuck": false
+        },
+        {
+          "drainCompleteStartedAtMs": 3000,
+          "recheck": true
+        },
+        {
+          "clear": true
+        },
+        {
+          "drainCompleteStartedAtMs": 4000,
+          "recheck": false
+        }
+      ]
+    }
+  ],
+  "forkRejoinDelays": [
+    {
+      "rejoins": 0,
+      "delayMs": 0
+    },
+    {
+      "rejoins": 1,
+      "delayMs": 600000
+    },
+    {
+      "rejoins": 2,
+      "delayMs": 1200000
+    },
+    {
+      "rejoins": 3,
+      "delayMs": 2400000
+    },
+    {
+      "rejoins": 6,
+      "delayMs": 19200000
+    },
+    {
+      "rejoins": 7,
+      "delayMs": 21600000
+    },
+    {
+      "rejoins": 40,
+      "delayMs": 21600000
+    }
+  ],
+  "forkRejoins": [
+    {
+      "name": "the first fork rejoins at once",
+      "events": [
+        {
+          "checkAt": 0,
+          "may": true
+        }
+      ]
+    },
+    {
+      "name": "a second fork soon after waits",
+      "events": [
+        {
+          "rejoinedAt": 1000
+        },
+        {
+          "checkAt": 1001,
+          "may": false
+        },
+        {
+          "checkAt": 600999,
+          "may": false
+        },
+        {
+          "checkAt": 601000,
+          "may": true
+        }
+      ]
+    },
+    {
+      "name": "each rejoin doubles the wait",
+      "events": [
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 600000
+        },
+        {
+          "checkAt": 1799999,
+          "may": false
+        },
+        {
+          "checkAt": 1800000,
+          "may": true
+        },
+        {
+          "rejoinedAt": 1800000
+        },
+        {
+          "checkAt": 4199999,
+          "may": false
+        },
+        {
+          "checkAt": 4200000,
+          "may": true
+        }
+      ]
+    },
+    {
+      "name": "a group that forks every time settles at the cap instead of looping",
+      "events": [
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "rejoinedAt": 0
+        },
+        {
+          "checkAt": 21599999,
+          "may": false
+        },
+        {
+          "checkAt": 21600000,
+          "may": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: MIT
+[package]
+name = "peachy-mls-core"
+description = "Peachy's MLS (RFC 9420) core: device-credential identity, group policy, and a group facade over OpenMLS."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# A `pdc1` issuer for tests and golden fixtures. OFF by default: a release
+# build of this crate contains nothing that can mint a credential. See
+# src/issuer.rs.
+# (It needs no `dep:sha2` any more: `src/device_link.rs` hashes in every build,
+# so sha2 is a plain dependency below rather than an optional one this feature
+# switches on.)
+test-issuer = []
+# Replay of the cross-client golden fixtures — mls/fixtures/rules.json (group
+# policy) and mls/fixtures/credentials.json (device-credential rejections):
+# one JSON-in / JSON-out door, so Rust, the wasm binding, Swift and Kotlin all
+# reach the same decision through the same signature. OFF by default for the
+# same reason as `test-issuer` — nothing a shipped client does needs a test
+# harness compiled into it. See src/fixture.rs.
+#
+# It implies `test-issuer` because a credential case MINTS: the fixture carries
+# 32-byte seeds and never key material, so the door has to be able to sign.
+# That is a widening of what `fixture` drags in, not of what ships — both are
+# off by default, and no build that turns one on leaves the other off anyway
+# (`swift/build-xcframework.sh` and the wasm Node test build both pass
+# `--features test-issuer,fixture`).
+fixture = ["test-issuer"]
+# The SQLite backend for the KV interface (src/sqlite.rs). OFF by default and
+# enabled by `peachy-mls-cabi`, which is how Apple and Android reach it; the
+# wasm binding must never turn it on, having no filesystem to put a file in and
+# no reason to carry SQLite's C into a browser bundle.
+sqlite = ["dep:rusqlite"]
+# `SqliteKv::open`: a SQLite store with no key, every group secret in the
+# clear for any reader of the disk. OFF by default and in every build that
+# ships; tests and tools turn it on. A store under a key is
+# `SqliteKv::open_store` / `open_encrypted`, and one written in the clear
+# before is migrated with `sqlite::store_encrypt_in_place`.
+insecure-plaintext-store = ["sqlite"]
+# The `forge_*` doors on `Client`: a commit or proposal with the sender-side
+# checks OFF, so a test can hand every other member what a modified client
+# would send and prove they refuse it. Only `cargo test --all-features` turns
+# it on; unlike `test-issuer` and `fixture`, no binding build script names it,
+# so nothing that ships can forge one.
+test-forgery = []
+# The `development` set of carried server keys (src/server_key_pins.rs): the
+# fixed key every local and test server signs with, whose seed is public in
+# this repository. OFF by default, like `test-issuer`: a build without it
+# carries an empty `development` set, so a shipped client pointed at a server
+# that is not production trusts no key anyone could sign with. Turned on by
+# `cargo test --all-features`, the host test archives, and app builds for local
+# development and testing (`--development-keys` on the build scripts); never by
+# a release build.
+development-keys = []
+
+[dependencies]
+# `draft-ietf-mls-pq-ciphersuites` is OpenMLS' own feature, named on all four
+# of its crates so the one flag agrees across the graph. It compiles in the
+# X-Wing (ML-KEM-768 + X25519) HPKE KEM that `PEACHY_CIPHERSUITE` names;
+# nothing is forked or patched (docs/mls-core.md §Ciphersuite 0x004F,
+# post-quantum).
+openmls = { workspace = true, features = ["draft-ietf-mls-pq-ciphersuites"] }
+openmls_traits = { workspace = true, features = ["draft-ietf-mls-pq-ciphersuites"] }
+openmls_rust_crypto = { workspace = true, features = ["draft-ietf-mls-pq-ciphersuites"] }
+openmls_basic_credential = { workspace = true, features = ["draft-ietf-mls-pq-ciphersuites"] }
+tls_codec = { workspace = true }
+ed25519-dalek = { workspace = true }
+# The platform CSPRNG behind `identity::generate_signing_key_seed`, which is
+# the one door all three bindings mint a device signing key through. On
+# wasm32 this resolves through the opt-ins spelled out in `wasm/Cargo.toml`:
+# that crate is the top-level one for a browser build and already names both
+# lines of getrandom in this graph, which is exactly the case those entries
+# were written for.
+getrandom = { workspace = true }
+base64 = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# NOT optional, since `src/device_link.rs` landed: the device link code is a
+# SHA-256 over two public keys and it is product code on every client, not
+# a test door. It was behind `test-issuer` while `src/issuer.rs` was the only
+# caller. Nothing new enters the graph either way — sha2 is already here
+# through ed25519-dalek and OpenMLS.
+sha2 = { workspace = true }
+# The encrypted account store (src/account_store.rs). Product code on every
+# client, like sha2 above, so plain dependencies rather than behind a feature.
+aes-gcm = { workspace = true, features = ["aes", "alloc", "zeroize"] }
+# Not used by name: each is here for its `zeroize` feature, which wipes the
+# AES round keys (equivalent to the key) and the GHASH key when an AES-GCM
+# cipher is dropped. Only polyval's portable backend wipes it: ARM runs that
+# one (its PMULL backend is opt-in), and on x86 mls/.cargo/config.toml forces
+# it, since the run-time dispatch there never drops its backend
+# (docs/mls-core.md §Security considerations).
+aes = { workspace = true, features = ["zeroize"] }
+ghash = { workspace = true, features = ["zeroize"] }
+polyval = { workspace = true, features = ["zeroize"] }
+hkdf = { workspace = true }
+# The commit MAC (src/steward.rs).
+hmac = { workspace = true }
+curve25519-dalek = { workspace = true }
+# Constant-time comparison of the envelope route tag and the device link
+# commitment (src/envelope.rs, src/device_link.rs).
+subtle = { workspace = true }
+# Wiping the device-seal secret a client keeps (src/device_seal.rs).
+zeroize = { workspace = true }
+
+# The SQLite backend, compiled as SQLCipher (src/sqlite.rs §Encryption at
+# rest). One C library on every target, differing only in where SQLCipher gets
+# its AES from: CommonCrypto on Apple, which the OS already ships, and a
+# vendored static OpenSSL everywhere else — the NDK exposes no libcrypto an app
+# may link, and a Linux build should not depend on which libssl-dev the host
+# happens to carry. Without a key the file is ordinary SQLite, so a caller
+# that passes none sees no change.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+rusqlite = { workspace = true, features = ["bundled-sqlcipher"], optional = true }
+
+[target.'cfg(not(target_vendor = "apple"))'.dependencies]
+rusqlite = { workspace = true, features = ["bundled-sqlcipher-vendored-openssl"], optional = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+# The X-Wing known-answer test (tests/xwing_vectors.rs) calls the KEM through
+# the crates OpenMLS' provider uses for ciphersuite 0x004F.
+hpke-rs-crypto = { workspace = true }
+hpke-rs-rust-crypto = { workspace = true }
+x-wing = { workspace = true }
+# The crate's own tests turn the issuer on. Integration tests are separate
+# crates, so this is the only way to hand them a minting key.
+peachy-mls-core = { path = ".", features = ["test-issuer", "fixture", "sqlite", "insecure-plaintext-store"] }
+
+# Writes a starting corpus for `mls/fuzz` from the golden fixtures; its header
+# has the command.
+[[example]]
+name = "fuzz_seeds"
+required-features = ["fixture"]
+
+# `polyval_force_soft` is polyval's own cfg, set for x86 by
+# mls/.cargo/config.toml; src/lib.rs refuses an Android x86 build without it.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(polyval_force_soft)"] }

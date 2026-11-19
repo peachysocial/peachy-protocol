@@ -1,0 +1,53 @@
+server_sfu: RESULT not attacker(mA1[]) is true.
+server_sfu: RESULT not attacker(mB1[]) is true.
+server_sfu: RESULT not attacker(mA2[]) is true.
+server_sfu: RESULT not attacker(mB2[]) is true.
+server_sfu: RESULT not attacker(sidA1[]) is true.
+server_sfu: RESULT not attacker(sidA2[]) is true.
+server_sfu: RESULT not attacker(es1[]) is true.
+server_sfu: RESULT not attacker(next_epoch(init_secret(es1[]),cs2[])) is true.
+server_sfu: RESULT not attacker(call_sender_key(exporter(es1[],L_CALL,cid[]),LEAF_A)) is true.
+server_sfu: RESULT not event(AcceptFrame(LEAF_B,E2,es,cid,LEAF_A,m)) is false.
+server_sfu: RESULT not event(AcceptLive(LEAF_B,E2,es,s)) is false.
+server_sfu: RESULT event(AcceptFrame(me,t,es,cid,l,m)) ==> event(SentFrame(t,es,cid,l,m)) is true.
+server_sfu: RESULT event(AcceptLive(me,t,es,s)) ==> event(SentLive(t,es,s)) is true.
+server_sfu: RESULT inj-event(AcceptFrame(me,t,es,cid,l,m)) ==> inj-event(SentFrame(t,es,cid,l,m)) is false.
+server_sfu: RESULT (but event(AcceptFrame(me,t,es,cid,l,m)) ==> event(SentFrame(t,es,cid,l,m)) is true.)
+post_removal: RESULT not attacker(mA2[]) is true.
+post_removal: RESULT not attacker(mB2[]) is true.
+post_removal: RESULT not attacker(sidA2[]) is true.
+post_removal: RESULT not attacker(next_epoch(init_secret(es1[]),cs2[])) is true.
+post_removal: RESULT not attacker(call_sender_key(exporter(next_epoch(init_secret(es1[]),cs2[]),L_CALL,cid[]),LEAF_A)) is true.
+post_removal: RESULT not attacker(exporter(next_epoch(init_secret(es1[]),cs2[]),L_LIVE,EMPTY)) is true.
+post_removal: RESULT not attacker(mA1[]) is false.
+post_removal: RESULT not event(AcceptFrame(LEAF_B,E2,es,cid[],LEAF_A,m)) is false.
+post_removal: RESULT event(AcceptFrame(me,E1,es,c,l,m)) ==> event(SentFrame(E1,es,c,l,m)) is false.
+post_removal: RESULT event(AcceptFrame(me,E2,es,c,l,m)) ==> event(SentFrame(E2,es,c,l,m)) is true.
+post_removal: RESULT event(AcceptLive(me,E2,es,s)) ==> event(SentLive(E2,es,s)) is true.
+forward_secrecy: RESULT not attacker_p1(mA1[]) is true.
+forward_secrecy: RESULT not attacker_p1(mB1[]) is true.
+forward_secrecy: RESULT not attacker_p1(es1[]) is true.
+forward_secrecy: RESULT not attacker_p1(call_sender_key(exporter(es1[],L_CALL,cid[]),LEAF_A)) is true.
+forward_secrecy: RESULT not attacker_p1(exporter(es1[],L_LIVE,EMPTY)) is true.
+forward_secrecy: RESULT not attacker_p1(mA2[]) is false.
+forward_secrecy_control: RESULT not attacker_p1(mA1[]) is false.
+pcs_update_by_compromised: RESULT not attacker(mA2[]) is true.
+pcs_update_by_compromised: RESULT not attacker(mB2[]) is true.
+pcs_update_by_compromised: RESULT not attacker(next_epoch(init_secret(es1[]),cs2[])) is true.
+pcs_update_by_compromised: RESULT not event(AcceptFrame(LEAF_B,E2,es,cid[],LEAF_A,m)) is false.
+pcs_update_by_other: RESULT not attacker(mA2[]) is false.
+pcs_update_by_other: RESULT not attacker(mB2[]) is false.
+non_participant: RESULT not attacker(m1A[]) is true.
+non_participant: RESULT not attacker(sid1A[]) is true.
+non_participant: RESULT not attacker(call_sender_key_v2(exporter(es[],L_CALL_V2,cid1[]),s1A[],LEAF_A)) is true.
+non_participant: RESULT event(AcceptFrameV2(me,cid1[],l,g,m)) ==> event(SentFrameV2(cid1[],l,g,m)) is true.
+non_participant: RESULT not attacker(m2A1[]) is true.
+non_participant: RESULT not attacker(call_sender_key_v2(exporter(es[],L_CALL_V2,cid2[]),s2A1[],LEAF_A)) is true.
+non_participant: RESULT not attacker(m3A0[]) is true.
+non_participant: RESULT not attacker(call_sender_key_v2(exporter(es[],L_CALL_V2,cid3[]),s3A0[],LEAF_A)) is true.
+non_participant: RESULT not event(AcceptFrameV2(LEAF_B,cid1[],LEAF_A,G0,m)) is false.
+non_participant: RESULT not event(AcceptFrameV2(LEAF_B,cid2[],LEAF_A,G1,m)) is false.
+non_participant: RESULT not event(AcceptFrameV2(LEAF_B,cid3[],LEAF_A,G1,m)) is false.
+non_participant: RESULT not attacker(exporter(es[],L_CALL_V2,cid1[])) is false.
+non_participant: RESULT not attacker(m2A0[]) is false.
+non_participant: RESULT not attacker(m3A1[]) is false.

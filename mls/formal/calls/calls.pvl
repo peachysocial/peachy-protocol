@@ -1,0 +1,139 @@
+(* SPDX-License-Identifier: MIT *)
+(* calls.pvl: the primitives and roles every Peachy call model shares.
+
+   What this abstracts, and why each abstraction is sound for the call key
+   schedule (docs/calls.md §The formal model):
+
+   - MLS is abstracted to its key schedule's ONE-WAY steps: an epoch secret,
+     init_secret(epoch secret), and next_epoch(init secret, commit secret).
+     TreeKEM is abstracted to "the commit secret is HPKE-sealed to each
+     remaining leaf's current encryption key". For secrecy this is the same
+     thing: in a real tree a leaf that can open any node on the path learns the
+     commit secret, and a leaf outside the group opens none.
+   - Every hash/KDF is a constructor with no destructor: a random oracle the
+     attacker can evaluate on inputs it knows and cannot invert.
+   - AES-GCM is an ideal AEAD. The frame encryptor's IV handling (uniqueness) is
+     NOT modeled; it is a requirement in the threat model, not a proof here.
+   - The attacker is Dolev-Yao and owns `net`: it is our API, the SFU
+     and TURN, the network, and the push providers, all colluding. *)
+
+type key.
+type hskey.   (* a leaf's HPKE private key *)
+type hpkey.
+type sskey.   (* a device's signature (Ed25519 device) key *)
+type spkey.
+
+free net: channel.
+
+(* ---- Public constants ---------------------------------------------------- *)
+
+const L_CALL: bitstring.           (* "peachy call v1" *)
+const L_LIVE: bitstring.           (* "peachy call live v1" *)
+const L_SEALED_SENDER: bitstring.  (* "peachy sealed-sender v1": the server is HANDED this one *)
+const EMPTY: bitstring.
+const HDR: bitstring.              (* the codec header the frame encryptor leaves in the clear, as AAD *)
+const LIVE_AAD: bitstring.         (* the live lane's AAD, the lane byte 0x02 *)
+const LEAF_A, LEAF_B, LEAF_C: bitstring.
+const E1, E2: bitstring.           (* epoch tags; the frame trailer's key_index *)
+
+(* ---- MLS key schedule (RFC 9420 §8), the part calls touch ---------------- *)
+
+fun init_secret(key): key.
+fun next_epoch(key, key): key.                  (* epoch_secret[n+1] = KDF(init_secret[n], commit_secret) *)
+fun exporter(key, bitstring, bitstring): key.   (* MLS-Exporter(epoch, label, context) *)
+
+(* ---- The call schedule (mls/core/src/call/keys.rs) ----------------------- *)
+
+fun call_sender_key(key, bitstring): key.   (* HKDF-Expand(call_root, "peachy call sender" || u32be(leaf), 16) *)
+fun call_frame_key(key): key.               (* HKDF(salt "peachy call frame v1", sender_key, info 0^128, 16) *)
+
+letfun frame_key_of(es: key, cid: bitstring, leaf: bitstring) =
+  call_frame_key(call_sender_key(exporter(es, L_CALL, cid), leaf)).
+
+letfun live_key_of(es: key) = exporter(es, L_LIVE, EMPTY).
+
+(* ---- HPKE (X-Wing in suite 0x004F; ideal here) --------------------------- *)
+
+fun hpk(hskey): hpkey.
+fun hpke_seal(hpkey, key): bitstring.
+reduc forall sk: hskey, m: key; hpke_open(sk, hpke_seal(hpk(sk), m)) = m.
+
+(* ---- Signatures (message-recovering, for brevity) ------------------------ *)
+
+fun spk(sskey): spkey.
+fun sign(sskey, bitstring): bitstring.
+reduc forall sk: sskey, m: bitstring; checksign(spk(sk), sign(sk, m)) = m.
+
+(* ---- AES-GCM ------------------------------------------------------------- *)
+
+fun aead(key, bitstring, bitstring, bitstring): bitstring.   (* key, iv, aad, plaintext *)
+reduc forall k: key, iv: bitstring, ad: bitstring, m: bitstring;
+  aead_open(k, iv, ad, aead(k, iv, ad, m)) = m.
+
+(* ---- Calls v2: participant media keys ------------------------------------ *)
+
+const L_CALL_V2: bitstring.        (* "peachy call v2" *)
+const L_MEDIA_KEY_V2: bitstring.   (* "peachy call media key v2", the grant's HPKE info prefix *)
+const MLS_AAD: bitstring.          (* an MLS application message's authenticated data *)
+
+(* The epoch's application-message keys (the secret tree), abstracted to one
+   key that every member of the epoch derives. A call signal (Joined, Left,
+   MediaKey) rides inside it. *)
+fun mls_app_key(key): key.
+
+(* HKDF-Expand(PRK = s, "peachy call media advance", 32). One-way: no destructor. *)
+fun media_advance(key): key.
+
+(* HKDF-Expand(PRK = HKDF-Extract(salt = call_root_v2, IKM = media secret),
+   "peachy call sender v2" || u32be(leaf), 16): one random oracle on all three. *)
+fun call_sender_key_v2(key, key, bitstring): key.
+
+letfun call_root_v2(es: key, cid: bitstring) = exporter(es, L_CALL_V2, cid).
+
+letfun frame_key_v2(es: key, cid: bitstring, s: key, leaf: bitstring) =
+  call_frame_key(call_sender_key_v2(call_root_v2(es, cid), s, leaf)).
+
+(* HPKE base mode with an info string (DHKEM(X25519, HKDF-SHA256), HKDF-SHA256,
+   AES-128-GCM), ideal. Base mode does not authenticate the sealer: anyone
+   holding the public key can seal to it. Opening needs the same info. *)
+fun hpke_seal_info(hpkey, bitstring, bitstring): bitstring.
+reduc forall sk: hskey, info: bitstring, m: bitstring;
+  hpke_open_info(sk, info, hpke_seal_info(hpk(sk), info, m)) = m.
+
+(* ---- Events -------------------------------------------------------------- *)
+
+(* epoch tag, epoch secret, call id, sender leaf, media *)
+event SentFrame(bitstring, key, bitstring, bitstring, bitstring).
+(* receiver, epoch tag, epoch secret, call id, claimed sender leaf, media *)
+event AcceptFrame(bitstring, bitstring, key, bitstring, bitstring, bitstring).
+(* epoch tag, epoch secret, signal *)
+event SentLive(bitstring, key, bitstring).
+(* receiver, epoch tag, epoch secret, signal *)
+event AcceptLive(bitstring, bitstring, key, bitstring).
+
+(* ---- Roles --------------------------------------------------------------- *)
+
+(* One encrypted media frame from `leaf` in epoch `es`. The leaf index rides
+   in the clear (the SFU routes by track; the receiver maps track -> leaf). *)
+let FrameSender(tag: bitstring, es: key, cid: bitstring, leaf: bitstring, m: bitstring) =
+  new iv: bitstring;
+  event SentFrame(tag, es, cid, leaf, m);
+  out(net, (tag, leaf, iv, aead(frame_key_of(es, cid, leaf), iv, HDR, m))).
+
+(* A receiver decrypting frames it attributes to `leaf`. Replicated by the
+   callers: the SFU can deliver anything, any number of times. *)
+let FrameReceiver(me: bitstring, tag: bitstring, es: key, cid: bitstring, leaf: bitstring) =
+  in(net, (=tag, =leaf, iv: bitstring, c: bitstring));
+  let m = aead_open(frame_key_of(es, cid, leaf), iv, HDR, c) in
+  event AcceptFrame(me, tag, es, cid, leaf, m).
+
+(* A live-lane signal (Joined, Left, React, ...) under the epoch's live key. *)
+let LiveSender(tag: bitstring, es: key, sig: bitstring) =
+  new iv: bitstring;
+  event SentLive(tag, es, sig);
+  out(net, (tag, iv, aead(live_key_of(es), iv, LIVE_AAD, sig))).
+
+let LiveReceiver(me: bitstring, tag: bitstring, es: key) =
+  in(net, (=tag, iv: bitstring, c: bitstring));
+  let sig = aead_open(live_key_of(es), iv, LIVE_AAD, c) in
+  event AcceptLive(me, tag, es, sig).

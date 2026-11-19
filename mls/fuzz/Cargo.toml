@@ -1,0 +1,292 @@
+# SPDX-License-Identifier: MIT
+# cargo-fuzz targets for the parsers and openers that bytes from the server or
+# another member cross (docs/mls-core.md §Fuzzing). Its own workspace,
+# outside mls/Cargo.toml's: libFuzzer needs a nightly toolchain and sanitizer
+# flags that the workspace's pinned stable build and the bindings must
+# never see.
+#
+# Thirty-three targets (docs/mls-core.md §Fuzzing has the table), and
+# `fuzz_targets/common/` the devices the ones that drive a real client share.
+# A scheduled job runs each for a bounded time every day. From the
+# repository root, write a starting corpus from the golden fixtures, then run a
+# target, here for a minute:
+#
+#   cargo run --manifest-path mls/Cargo.toml -p peachy-mls-core --features fixture \
+#     --example fuzz_seeds -- mls/fuzz/corpus
+#   cargo +nightly fuzz run --fuzz-dir mls/fuzz envelope_open -- -max_total_time=60
+#
+# `cargo +nightly fuzz list --fuzz-dir mls/fuzz` lists the targets. The corpus
+# directory is in this crate's .gitignore.
+
+[package]
+name = "peachy-mls-fuzz"
+version = "0.0.0"
+license = "MIT"
+repository = "https://github.com/peachysocial/peachy-protocol"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.10"
+# `test-issuer`: `call_envelope_open` builds a real two-member group so it can
+# drive `Client::open_call_signal`, the door every call byte goes through, and
+# `credential_parse` signs payloads with the test issuer. `fixture` (which
+# implies it) opens the fixed-nonce sealers that `account_store_open` and
+# `account_key_box_open` seal with.
+peachy-mls-core = { path = "../core", features = ["fixture"] }
+# `string_list` reads the C door's list codec, behind the cabi's `fuzzing`
+# feature, which ships in no archive.
+peachy-mls-cabi = { path = "../cabi", features = ["fuzzing"] }
+# The same pins as mls/Cargo.toml: `call_ring_step` drives the reducer's JSON
+# door, and `group_meta` reads and writes a group context's extensions.
+serde_json = "=1.0.145"
+openmls = { version = "=0.9.0", features = ["draft-ietf-mls-pq-ciphersuites"] }
+tls_codec = "=0.5.0"
+# `call_grant_sealed` seals a raw plaintext with HPKE exactly as a media grant
+# is sealed, and `welcome_gap_block` a raw plaintext with AES-256-GCM exactly as
+# a gap block is, so the checks after each open see bytes no sealer writes;
+# `call_envelope_open` signs the fuzzer's live frames with a member's leaf key.
+# The same pins and features as mls/Cargo.toml and mls/core/Cargo.toml.
+openmls_rust_crypto = { version = "=0.6.0", features = ["draft-ietf-mls-pq-ciphersuites"] }
+openmls_traits = { version = "=0.6.0", features = ["draft-ietf-mls-pq-ciphersuites"] }
+aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc"] }
+
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "envelope_open"
+path = "fuzz_targets/envelope_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "envelope_roundtrip"
+path = "fuzz_targets/envelope_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_signal_decode"
+path = "fuzz_targets/call_signal_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_live_frame_open"
+path = "fuzz_targets/call_live_frame_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_envelope_open"
+path = "fuzz_targets/call_envelope_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_signal_json"
+path = "fuzz_targets/call_signal_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_ring_step"
+path = "fuzz_targets/call_ring_step.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "credential_parse"
+path = "fuzz_targets/credential_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "join_request_check"
+path = "fuzz_targets/join_request_check.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "account_store_open"
+path = "fuzz_targets/account_store_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "account_key_box_open"
+path = "fuzz_targets/account_key_box_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_link"
+path = "fuzz_targets/device_link.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "group_meta"
+path = "fuzz_targets/group_meta.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "content_hint_peek"
+path = "fuzz_targets/content_hint_peek.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "welcome_frame"
+path = "fuzz_targets/welcome_frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "string_list"
+path = "fuzz_targets/string_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mls_message_process"
+path = "fuzz_targets/mls_message_process.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "welcome_join"
+path = "fuzz_targets/welcome_join.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "key_package_check"
+path = "fuzz_targets/key_package_check.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_grant_payload"
+path = "fuzz_targets/call_grant_payload.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_grant_open"
+path = "fuzz_targets/call_grant_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "call_grant_sealed"
+path = "fuzz_targets/call_grant_sealed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "typing_open"
+path = "fuzz_targets/typing_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "epoch_envelope"
+path = "fuzz_targets/epoch_envelope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_seal_open"
+path = "fuzz_targets/device_seal_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "commit_entry"
+path = "fuzz_targets/commit_entry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "steward_frames"
+path = "fuzz_targets/steward_frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "welcome_gap_block"
+path = "fuzz_targets/welcome_gap_block.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "account_signatures"
+path = "fuzz_targets/account_signatures.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "account_store_signed"
+path = "fuzz_targets/account_store_signed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_link_exchange"
+path = "fuzz_targets/device_link_exchange.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "server_key_list"
+path = "fuzz_targets/server_key_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "own_devices"
+path = "fuzz_targets/own_devices.rs"
+test = false
+doc = false
+bench = false

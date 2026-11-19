@@ -1,0 +1,45 @@
+(* SPDX-License-Identifier: MIT *)
+(* pcs_update_by_other.pv: post-compromise security when a DIFFERENT device
+   self-updates.
+
+   docs/calls.md §Keys as built has every participant self-update on
+   its own offset (R-K4). This file shows why: A's group state (its epoch-1
+   secret and its leaf HPKE key) is copied, and only B self-updates. B's
+   commit seals the path secret to A's unchanged leaf, and so to the
+   attacker.
+
+   Expected: epoch 2 is NOT secret. A self-update heals only the leaf of the
+   device that commits it (docs/mls-core.md §Periodic leaf rotation). See
+   docs/calls.md §Disagreements, D2. *)
+
+free es1: key [private].
+free gid: bitstring.
+free cid: bitstring.
+free leafA1, leafB1, leafB2: hskey [private].
+free sigA, sigB: sskey [private].
+free cs2: key [private].
+free mA2, mB2: bitstring [private].
+
+(* Expected FALSE. *)
+query attacker(mA2).
+query attacker(mB2).
+
+process
+  out(net, (hpk(leafA1), hpk(leafB1), spk(sigA), spk(sigB)));
+  out(net, (es1, leafA1));
+  (
+      (
+        (* B, the lowest index, self-updates *)
+        let es2 = next_epoch(init_secret(es1), cs2) in
+        let body = (E2, hpke_seal(hpk(leafA1), cs2), hpk(leafB2)) in
+        out(net, (body, sign(sigB, body)));
+        FrameSender(E2, es2, cid, LEAF_B, mB2)
+      )
+    | (
+        in(net, (body: bitstring, s: bitstring));
+        let (=body) = checksign(spk(sigB), s) in
+        let (=E2, ctA: bitstring, newB: hpkey) = body in
+        let es2a = next_epoch(init_secret(es1), hpke_open(leafA1, ctA)) in
+        FrameSender(E2, es2a, cid, LEAF_A, mA2)
+      )
+  )

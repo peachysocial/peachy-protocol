@@ -1,0 +1,969 @@
+{
+  "_about": [
+    "Golden cases for the answer to a resend ask: its wire format (`cases`) and whether a well-formed answer may fill its seat on this device (`acceptCases`).",
+    "Normative: docs/sealed-messages.md §Asking for a message again.",
+    "The answer is `{peachy: \"resend\", v: 1, m, d, t, a, p?, i?, r?, b?, x?}`: `m` is the envelope id of the message that would not open (the seat the words go back into), `d` the device that asked, `t` the words, `a` the attachment pointers in the frame's own one-letter shape, `p` the place, `i`, `r` and `b` the frame's id, reply parent and broadcast flag, and `x` the original's disappearing timer.",
+    "`d` is always written but is not required on the way in. `i`, `r`, `b`, `p` and `x` are written only when set and read with the frame's own rules; a bad `x` refuses the answer, as it does the frame.",
+    "In a bundle or `expect`, an absent `clientId`, `replyTo` or `broadcast` means \"\", \"\" or false, and an absent `expireSeconds` means 0.",
+    "`encode` gives a bundle, the exact top-level keys the wire carries (`keys`), the exact keys of each pointer (`pointerKeys`), and what parsing that wire back gives. `parse` and `refuse` give a wire string and the bundle a reader reads out of it, or null for a payload that is not an answer.",
+    "`acceptCases` (call `acceptResend`) take `sender` (the answer's decrypted sender, {actor}), `group` (where it arrived), `row` (this device's row for that message, {group, author, sealed}, or null), `forDevice` (the answer's `d`), `thisDevice`, `asked` (whether this device asked, or holds an unreadable seat for it), `held` (null, `author` or `quotation`), `commitment` (what the author's commitment the unopened message carried says of the sender: `match`, `mismatch` or `absent`; absent from a case means `absent`).",
+    "They answer `accept` or the first refusal, in this order: `not_for_this_device`, `no_such_row`, `wrong_group`, `not_sealed`, `not_the_author` (also for a `mismatch`), `no_commitment`, `not_asked`, `already_held`. An accepted answer replaces a quotation the seat holds, and is stored with its sender as the author record.",
+    "`commitmentCases` pin the author's commitment itself: SHA-256(\"peachy resend author v1\" || u32be length || group id || u32be length || actor id || u32be length || secret), first 16 bytes, carried after the three hint bytes of the authenticated data (zeros for none). The secret is a transcript frame's `i`, lowercased, or a lane frame's whole text when it carries a 16-byte salt `z`. `commit` gives a group, an actor and a secret (text) and the commitment (hex); `secret` gives a hint and a plaintext (hex) and the secret (hex), or null for a message that commits to nobody; `aad` gives authenticated data (hex) and the hint and commitment it carries.",
+    "Cases for story references are left out: they are not specified here.",
+    "Object keys and ids in these cases are opaque test strings; a reader does not interpret them beyond the rules cited above.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "cases": [
+    {
+      "id": "encode/thread",
+      "why": "A reply goes back into its seat as a reply: `i`, `r` and `b` ride beside the words, so the asking device threads it exactly as the author's did.",
+      "call": "encode",
+      "bundle": {
+        "messageId": "m-reply",
+        "forDeviceId": "device-asking",
+        "text": "yes, the 9:40",
+        "attachments": [],
+        "place": null,
+        "clientId": "22222222-2222-4222-8222-222222222222",
+        "replyTo": "11111111-1111-4111-8111-111111111111",
+        "broadcast": true
+      },
+      "keys": [
+        "a",
+        "b",
+        "d",
+        "i",
+        "m",
+        "peachy",
+        "r",
+        "t",
+        "v"
+      ],
+      "pointerKeys": [],
+      "expect": {
+        "messageId": "m-reply",
+        "forDeviceId": "device-asking",
+        "text": "yes, the 9:40",
+        "attachments": [],
+        "place": null,
+        "clientId": "22222222-2222-4222-8222-222222222222",
+        "replyTo": "11111111-1111-4111-8111-111111111111",
+        "broadcast": true
+      }
+    },
+    {
+      "id": "encode/top-level",
+      "why": "A top-level message carries its own id and nothing else: no `r`, and no `b` without one.",
+      "call": "encode",
+      "bundle": {
+        "messageId": "m-top",
+        "forDeviceId": "device-asking",
+        "text": "ferry at nine?",
+        "attachments": [],
+        "place": null,
+        "clientId": "11111111-1111-4111-8111-111111111111",
+        "replyTo": "",
+        "broadcast": true
+      },
+      "keys": [
+        "a",
+        "d",
+        "i",
+        "m",
+        "peachy",
+        "t",
+        "v"
+      ],
+      "pointerKeys": [],
+      "expect": {
+        "messageId": "m-top",
+        "forDeviceId": "device-asking",
+        "text": "ferry at nine?",
+        "attachments": [],
+        "place": null,
+        "clientId": "11111111-1111-4111-8111-111111111111"
+      }
+    },
+    {
+      "id": "parse/thread",
+      "why": "The thread read by hand, upper case and all: ids are compared lowercase, as the frame's are.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"words\",\"a\":[],\"i\":\"AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA\",\"r\":\"BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB\",\"b\":true}",
+      "expect": {
+        "messageId": "m-1",
+        "forDeviceId": "device-asking",
+        "text": "words",
+        "attachments": [],
+        "place": null,
+        "clientId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "replyTo": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "broadcast": true
+      }
+    },
+    {
+      "id": "parse/thread-names-itself",
+      "why": "An `r` naming the message itself is dropped, and `b` with it; the words and the id survive.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"words\",\"a\":[],\"i\":\"22222222-2222-4222-8222-222222222222\",\"r\":\"22222222-2222-4222-8222-222222222222\",\"b\":true}",
+      "expect": {
+        "messageId": "m-1",
+        "forDeviceId": "device-asking",
+        "text": "words",
+        "attachments": [],
+        "place": null,
+        "clientId": "22222222-2222-4222-8222-222222222222"
+      }
+    },
+    {
+      "id": "parse/thread-malformed",
+      "why": "Thread keys that are not uuids, or a `b` that is not `true`, read as absent and never cost the answer its words.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"words\",\"a\":[],\"i\":\"nope\",\"r\":7,\"b\":1}",
+      "expect": {
+        "messageId": "m-1",
+        "forDeviceId": "device-asking",
+        "text": "words",
+        "attachments": [],
+        "place": null
+      }
+    },
+    {
+      "id": "parse/broadcast-needs-a-parent",
+      "why": "`b` is read false without a surviving `r`, exactly as in the frame.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"words\",\"a\":[],\"i\":\"11111111-1111-4111-8111-111111111111\",\"r\":\"not-a-uuid\",\"b\":true}",
+      "expect": {
+        "messageId": "m-1",
+        "forDeviceId": "device-asking",
+        "text": "words",
+        "attachments": [],
+        "place": null,
+        "clientId": "11111111-1111-4111-8111-111111111111"
+      }
+    },
+    {
+      "id": "encode/words",
+      "why": "The ordinary answer: a sentence going back into its seat.",
+      "call": "encode",
+      "bundle": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "forDeviceId": "device-asking",
+        "text": "the sentence that was lost",
+        "attachments": [],
+        "place": null
+      },
+      "keys": [
+        "a",
+        "d",
+        "m",
+        "peachy",
+        "t",
+        "v"
+      ],
+      "pointerKeys": [],
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "forDeviceId": "device-asking",
+        "text": "the sentence that was lost",
+        "attachments": [],
+        "place": null
+      }
+    },
+    {
+      "id": "encode/attachments",
+      "why": "A version 1 pointer writes eleven keys; a chunked one writes `v` and `cs` too. Without them a chunked photo would be read as a version 1 pointer and would not open.",
+      "call": "encode",
+      "bundle": {
+        "messageId": "m-with-photos",
+        "forDeviceId": "device-asking",
+        "text": "here they are",
+        "attachments": [
+          {
+            "version": 1,
+            "objectKey": "attachments/me/one.bin",
+            "key": "a2V5",
+            "nonce": "bm9uY2UtdHdlbHZl",
+            "chunkSize": 0,
+            "digest": "ZGlnZXN0",
+            "size": 1234,
+            "mime": "image/jpeg",
+            "width": 100,
+            "height": 200,
+            "durationMs": 0,
+            "color": "#aabbcc",
+            "fileName": "beach.jpg"
+          },
+          {
+            "version": 3,
+            "objectKey": "attachments/me/two.bin",
+            "key": "a2V5Mg==",
+            "nonce": "bm9u",
+            "chunkSize": 65536,
+            "digest": "ZGlnZXN0Mg==",
+            "size": 999999,
+            "mime": "video/mp4",
+            "width": 1920,
+            "height": 1080,
+            "durationMs": 4200,
+            "color": "#112233",
+            "fileName": "clip.mp4"
+          }
+        ],
+        "place": null
+      },
+      "keys": [
+        "a",
+        "d",
+        "m",
+        "peachy",
+        "t",
+        "v"
+      ],
+      "pointerKeys": [
+        [
+          "c",
+          "d",
+          "f",
+          "h",
+          "k",
+          "m",
+          "ms",
+          "n",
+          "o",
+          "s",
+          "w"
+        ],
+        [
+          "c",
+          "cs",
+          "d",
+          "f",
+          "h",
+          "k",
+          "m",
+          "ms",
+          "n",
+          "o",
+          "s",
+          "v",
+          "w"
+        ]
+      ],
+      "expect": {
+        "messageId": "m-with-photos",
+        "forDeviceId": "device-asking",
+        "text": "here they are",
+        "attachments": [
+          {
+            "version": 1,
+            "objectKey": "attachments/me/one.bin",
+            "key": "a2V5",
+            "nonce": "bm9uY2UtdHdlbHZl",
+            "chunkSize": 0,
+            "digest": "ZGlnZXN0",
+            "size": 1234,
+            "mime": "image/jpeg",
+            "width": 100,
+            "height": 200,
+            "durationMs": 0,
+            "color": "#aabbcc",
+            "fileName": "beach.jpg"
+          },
+          {
+            "version": 3,
+            "objectKey": "attachments/me/two.bin",
+            "key": "a2V5Mg==",
+            "nonce": "bm9u",
+            "chunkSize": 65536,
+            "digest": "ZGlnZXN0Mg==",
+            "size": 999999,
+            "mime": "video/mp4",
+            "width": 1920,
+            "height": 1080,
+            "durationMs": 4200,
+            "color": "#112233",
+            "fileName": "clip.mp4"
+          }
+        ],
+        "place": null
+      }
+    },
+    {
+      "id": "encode/place",
+      "why": "A place rides the answer as `p`, and a place with no words is still an answer.",
+      "call": "encode",
+      "bundle": {
+        "messageId": "m-place",
+        "forDeviceId": "device-asking",
+        "text": "",
+        "attachments": [],
+        "place": {
+          "name": "Philz Coffee",
+          "context": "Palo Alto",
+          "lat": 37.7643,
+          "lng": -122.4212,
+          "radiusKm": 0.25
+        }
+      },
+      "keys": [
+        "a",
+        "d",
+        "m",
+        "p",
+        "peachy",
+        "t",
+        "v"
+      ],
+      "pointerKeys": [],
+      "expect": {
+        "messageId": "m-place",
+        "forDeviceId": "device-asking",
+        "text": "",
+        "attachments": [],
+        "place": {
+          "name": "Philz Coffee",
+          "context": "Palo Alto",
+          "lat": 37.7643,
+          "lng": -122.4212,
+          "radiusKm": 0.25
+        }
+      }
+    },
+    {
+      "id": "parse/format",
+      "why": "The format, read by hand rather than round-tripped — the bytes an author on any client puts on the lane.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"words\",\"a\":[{\"o\":\"attachments/me/one.bin\",\"k\":\"a2V5\",\"n\":\"bm9uY2U=\",\"d\":\"ZGln\",\"s\":12,\"m\":\"image/png\",\"w\":4,\"h\":5,\"ms\":0,\"c\":\"#ffffff\",\"f\":\"a.png\"}]}",
+      "expect": {
+        "messageId": "m-1",
+        "forDeviceId": "device-asking",
+        "text": "words",
+        "attachments": [
+          {
+            "version": 1,
+            "objectKey": "attachments/me/one.bin",
+            "key": "a2V5",
+            "nonce": "bm9uY2U=",
+            "chunkSize": 0,
+            "digest": "ZGln",
+            "size": 12,
+            "mime": "image/png",
+            "width": 4,
+            "height": 5,
+            "durationMs": 0,
+            "color": "#ffffff",
+            "fileName": "a.png"
+          }
+        ],
+        "place": null
+      }
+    },
+    {
+      "id": "parse/no-device",
+      "why": "`d` is not required. An answer without one is still the author's words for a seat this device cannot read.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"t\":\"words\"}",
+      "expect": {
+        "messageId": "m-1",
+        "forDeviceId": "",
+        "text": "words",
+        "attachments": [],
+        "place": null
+      }
+    },
+    {
+      "id": "parse/pointer-without-object-key",
+      "why": "A pointer addressing nothing is dropped and the words survive. Losing a photograph out of an answer is worse than nothing and far better than losing the answer.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-2\",\"d\":\"\",\"t\":\"still here\",\"a\":[3,{\"nope\":true},{\"o\":\"\",\"k\":\"a2V5\"}]}",
+      "expect": {
+        "messageId": "m-2",
+        "forDeviceId": "",
+        "text": "still here",
+        "attachments": [],
+        "place": null
+      }
+    },
+    {
+      "id": "parse/invalid-place-dropped",
+      "why": "A `p` that is not a real place is dropped by the envelope's own rule while the words survive.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-3\",\"d\":\"\",\"t\":\"kept\",\"p\":{\"n\":\"X\",\"la\":91,\"lo\":0}}",
+      "expect": {
+        "messageId": "m-3",
+        "forDeviceId": "",
+        "text": "kept",
+        "attachments": [],
+        "place": null
+      }
+    },
+    {
+      "id": "refuse/not-json",
+      "why": "Most of what arrives on this lane is not a resend, and a reader that threw would turn that into a conversation that stops catching up.",
+      "call": "parse",
+      "wire": "hello",
+      "expect": null
+    },
+    {
+      "id": "refuse/another-payload",
+      "why": "History sharing rides the same lane. The discriminator is what keeps the two apart in both directions.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":1,\"share\":\"s\"}",
+      "expect": null
+    },
+    {
+      "id": "refuse/newer-version",
+      "why": "A version this build does not read is somebody else's payload, whatever it looks like.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":2,\"m\":\"m\",\"t\":\"x\"}",
+      "expect": null
+    },
+    {
+      "id": "refuse/coerced-version",
+      "why": "A bundle is ours only when it says so as a NUMBER. A reader that coerced \"1\" would accept what the other two refuse.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":\"1\",\"m\":\"m\",\"t\":\"x\"}",
+      "expect": null
+    },
+    {
+      "id": "refuse/boolean-version",
+      "why": "JSON true is a number to more than one of these runtimes. It is not this version.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":true,\"m\":\"m\",\"t\":\"x\"}",
+      "expect": null
+    },
+    {
+      "id": "refuse/no-seat",
+      "why": "Without a message id there is nothing to put the words back into.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"d\":\"device-asking\",\"t\":\"x\"}",
+      "expect": null
+    },
+    {
+      "id": "refuse/empty-seat",
+      "why": "An empty id is no id, in any of the three spellings.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"\",\"message\":\"\",\"id\":\"\",\"t\":\"x\"}",
+      "expect": null
+    },
+    {
+      "id": "refuse/nothing-in-it",
+      "why": "An answer with no words, no pointers and no place would archive a row claiming this device had opened an empty message — and nothing would ever try again.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m\",\"d\":\"device-asking\",\"t\":\"\",\"a\":[]}",
+      "expect": null
+    },
+    {
+      "id": "encode/timer",
+      "why": "A disappearing message goes back with its own timer, so the asking device expires it too.",
+      "call": "encode",
+      "bundle": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "forDeviceId": "device-asking",
+        "text": "see you",
+        "attachments": [],
+        "place": null,
+        "expireSeconds": 604800
+      },
+      "keys": [
+        "a",
+        "d",
+        "m",
+        "peachy",
+        "t",
+        "v",
+        "x"
+      ],
+      "pointerKeys": [],
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "forDeviceId": "device-asking",
+        "text": "see you",
+        "attachments": [],
+        "place": null,
+        "expireSeconds": 604800
+      }
+    },
+    {
+      "id": "parse/timer",
+      "why": "The timer read back.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"see you\",\"a\":[],\"x\":30}",
+      "expect": {
+        "messageId": "m-1",
+        "forDeviceId": "device-asking",
+        "text": "see you",
+        "attachments": [],
+        "place": null,
+        "expireSeconds": 30
+      }
+    },
+    {
+      "id": "refuse/timer-over-cap",
+      "why": "A timer no writer makes refuses the answer rather than keep the words forever.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"see you\",\"a\":[],\"x\":2419201}",
+      "expect": null
+    },
+    {
+      "id": "refuse/timer-zero",
+      "why": "Off is absence.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"see you\",\"a\":[],\"x\":0}",
+      "expect": null
+    },
+    {
+      "id": "refuse/timer-string",
+      "why": "A number, not a string.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"m-1\",\"d\":\"device-asking\",\"t\":\"see you\",\"a\":[],\"x\":\"30\"}",
+      "expect": null
+    }
+  ],
+  "acceptCases": [
+    {
+      "name": "the author answers the device that asked, into an empty sealed seat",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "commitment": "match",
+      "expect": "accept"
+    },
+    {
+      "name": "an answer for another device is left alone",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-cy",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "expect": "not_for_this_device"
+    },
+    {
+      "name": "no such row here",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": null,
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "expect": "no_such_row"
+    },
+    {
+      "name": "a row from another conversation is not this answer's to fill",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g2",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "expect": "wrong_group"
+    },
+    {
+      "name": "a clear row shows its own words",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": false
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "expect": "not_sealed"
+    },
+    {
+      "name": "another member cannot answer for somebody else's message",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-cy"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "expect": "not_the_author"
+    },
+    {
+      "name": "a row that names nobody (a sessionless send) takes the answer's own credential as its author",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "commitment": "match",
+      "expect": "accept"
+    },
+    {
+      "name": "nobody asked and the seat is not unreadable",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": false,
+      "held": null,
+      "commitment": "match",
+      "expect": "not_asked"
+    },
+    {
+      "name": "the author's words are already held",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": "author",
+      "commitment": "match",
+      "expect": "already_held"
+    },
+    {
+      "name": "the author's resend replaces a quotation",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": "quotation",
+      "commitment": "match",
+      "expect": "accept"
+    },
+    {
+      "name": "the device check runs first, so a stranger's answer to another device says nothing about the row",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-cy"
+      },
+      "group": "g1",
+      "row": null,
+      "forDevice": "dev-cy",
+      "thisDevice": "dev-bo",
+      "asked": false,
+      "held": null,
+      "expect": "not_for_this_device"
+    },
+    {
+      "name": "the commitment the lost message carried names the author who answered",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "commitment": "match",
+      "expect": "accept"
+    },
+    {
+      "name": "a sealed-sender row's answer is refused when the commitment names somebody else",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-cy"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "commitment": "mismatch",
+      "expect": "not_the_author"
+    },
+    {
+      "name": "a mismatch is refused even where the row's author agrees",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "commitment": "mismatch",
+      "expect": "not_the_author"
+    },
+    {
+      "name": "a message with no commitment takes no answer",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "commitment": "absent",
+      "expect": "no_commitment"
+    },
+    {
+      "name": "the author check runs before the commitment's",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-cy"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": true,
+      "held": null,
+      "commitment": "absent",
+      "expect": "not_the_author"
+    },
+    {
+      "name": "the commitment's check runs before the ask's",
+      "call": "acceptResend",
+      "sender": {
+        "actor": "actor-ada"
+      },
+      "group": "g1",
+      "row": {
+        "group": "g1",
+        "author": "actor-ada",
+        "sealed": true
+      },
+      "forDevice": "dev-bo",
+      "thisDevice": "dev-bo",
+      "asked": false,
+      "held": null,
+      "commitment": "mismatch",
+      "expect": "not_the_author"
+    }
+  ],
+  "commitmentCases": [
+    {
+      "name": "the commitment to an author: SHA-256 over the domain and the length-prefixed group, actor and secret, first 16 bytes",
+      "kind": "resend_commitment",
+      "call": "commit",
+      "groupId": "g1",
+      "actorId": "actor-ada",
+      "secret": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "expect": {
+        "commitment": "1ffdc5566b2c6eabdfe7361459a998e5"
+      }
+    },
+    {
+      "name": "another member commits to something else for the same secret",
+      "kind": "resend_commitment",
+      "call": "commit",
+      "groupId": "g1",
+      "actorId": "actor-cy",
+      "secret": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "expect": {
+        "commitment": "dd63353f97a5821a7b6f487308f37ca5"
+      }
+    },
+    {
+      "name": "and so does the same author in another group",
+      "kind": "resend_commitment",
+      "call": "commit",
+      "groupId": "g2",
+      "actorId": "actor-ada",
+      "secret": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "expect": {
+        "commitment": "a87b42064eae9626d7b7de5c04571329"
+      }
+    },
+    {
+      "name": "a transcript frame's secret is its id, lowercased",
+      "kind": "resend_commitment",
+      "call": "secret",
+      "hint": 1,
+      "plaintext": "ff057b2269223a2230413142324333442d344535462d344136422d384337442d394530463141324233433444222c2274223a226869222c2261223a5b5d7d",
+      "expect": {
+        "secret": "30613162326333642d346535662d346136622d386337642d396530663161326233633464"
+      }
+    },
+    {
+      "name": "a transcript frame whose id is no UUID commits to nobody",
+      "kind": "resend_commitment",
+      "call": "secret",
+      "hint": 1,
+      "plaintext": "ff057b2269223a226e6f742d612d75756964222c2274223a226869222c2261223a5b5d7d",
+      "expect": {
+        "secret": null
+      }
+    },
+    {
+      "name": "a salted lane frame's secret is its whole text",
+      "kind": "resend_commitment",
+      "call": "secret",
+      "hint": 3,
+      "plaintext": "7b22706561636879223a227265616374696f6e222c2276223a312c226d223a226d31222c2265223a22f09f918d222c227a223a2241414543417751464267634943516f4c4441304f44773d3d227d",
+      "expect": {
+        "secret": "7b22706561636879223a227265616374696f6e222c2276223a312c226d223a226d31222c2265223a22f09f918d222c227a223a2241414543417751464267634943516f4c4441304f44773d3d227d"
+      }
+    },
+    {
+      "name": "a salt that is not 16 bytes commits to nobody",
+      "kind": "resend_commitment",
+      "call": "secret",
+      "hint": 3,
+      "plaintext": "7b22706561636879223a227265616374696f6e222c2276223a312c226d223a226d31222c2265223a22f09f918d222c227a223a2241414543417751464267634943516f4c4441304f227d",
+      "expect": {
+        "secret": null
+      }
+    },
+    {
+      "name": "an unsalted lane frame is guessable, so it commits to nobody",
+      "kind": "resend_commitment",
+      "call": "secret",
+      "hint": 3,
+      "plaintext": "7b22706561636879223a227265616374696f6e222c2276223a312c226d223a226d31222c2265223a22f09f918d227d",
+      "expect": {
+        "secret": null
+      }
+    },
+    {
+      "name": "a frame nobody asks for again commits to nobody",
+      "kind": "resend_commitment",
+      "call": "secret",
+      "hint": 2,
+      "plaintext": "ff057b2269223a2230413142324333442d344535462d344136422d384337442d394530463141324233433444222c2274223a226869222c2261223a5b5d7d",
+      "expect": {
+        "secret": null
+      }
+    },
+    {
+      "name": "a current build's authenticated data: the hint, then the commitment",
+      "kind": "resend_commitment",
+      "call": "aad",
+      "aad": "7001011ffdc5566b2c6eabdfe7361459a998e5",
+      "expect": {
+        "hint": 1,
+        "commitment": "1ffdc5566b2c6eabdfe7361459a998e5"
+      }
+    },
+    {
+      "name": "zeros commit to nobody",
+      "kind": "resend_commitment",
+      "call": "aad",
+      "aad": "70010300000000000000000000000000000000",
+      "expect": {
+        "hint": 3,
+        "commitment": null
+      }
+    },
+    {
+      "name": "three bytes carry the hint and no commitment",
+      "kind": "resend_commitment",
+      "call": "aad",
+      "aad": "700101",
+      "expect": {
+        "hint": 1,
+        "commitment": null
+      }
+    },
+    {
+      "name": "bytes that read as no hint carry no commitment either",
+      "kind": "resend_commitment",
+      "call": "aad",
+      "aad": "7101011ffdc5566b2c6eabdfe7361459a998e5",
+      "expect": {
+        "hint": null,
+        "commitment": null
+      }
+    }
+  ]
+}

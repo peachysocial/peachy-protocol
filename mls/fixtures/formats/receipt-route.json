@@ -1,0 +1,480 @@
+{
+  "_about": [
+    "Golden cases for which read and delivered marks a device sends, and how often. The wire is in receipt.json.",
+    "Normative: docs/sealed-messages.md §Receipts (the Routing rules).",
+    "Every mark goes to every device in the conversation, the sender's own included, like any other send, so its recipients say nothing about who wrote the messages it covers. Nothing about a mark depends on whom the sender blocked; the table therefore has no recipients, authors or block list.",
+    "`read.trail` is the frame ids of the transcript the caller holds, in ascending order. A read goes when `m` is not empty and differs from `sentRead`, unless `m` and `sentRead` are both in the trail and `sentRead` is at or after `m`.",
+    "A delivered mark goes when `m` is not empty and differs from `sentDelivered`, unless a read covers it. The covering read is the read sent in the same flush, else `sentRead`; it covers the delivered message when it names the same message, or when both are in `read.trail` and the delivered message is at or before it.",
+    "`lane`, when present and not null, is the envelope id of the newest reaction, edit or delete from somebody else opened since the last flush. When nothing else goes, one lane mark naming it goes, written in `want` as {k: \"delivered\", m, l: true} and sent as `k: \"lane\"` (receipt.json). It is never checked against `sentDelivered` or a read, and it moves neither. When anything else goes, that is the batch's one follow-up.",
+    "The read is sent first, then the delivered mark. `want` is the list of sends, in order, as {k, m} or {k, m, l}.",
+    "`spacing` pins the least wait between two flushes into one conversation: min(`maxMs`, max(`baseMs`, devices × `perDeviceMs`)), where devices is the number of leaves in the tree when the last flush went. The first mark into a conversation waits `baseMs`.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "spacing": {
+    "baseMs": 1500,
+    "perDeviceMs": 250,
+    "maxMs": 300000,
+    "cases": [
+      {
+        "devices": 0,
+        "ms": 1500
+      },
+      {
+        "devices": 2,
+        "ms": 1500
+      },
+      {
+        "devices": 6,
+        "ms": 1500
+      },
+      {
+        "devices": 7,
+        "ms": 1750
+      },
+      {
+        "devices": 40,
+        "ms": 10000
+      },
+      {
+        "devices": 200,
+        "ms": 50000
+      },
+      {
+        "devices": 1200,
+        "ms": 300000
+      },
+      {
+        "devices": 5000,
+        "ms": 300000
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a first read goes",
+      "state": {
+        "sentRead": null,
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "m2",
+        "trail": [
+          "m1",
+          "m2"
+        ]
+      },
+      "delivered": null,
+      "want": [
+        {
+          "k": "read",
+          "m": "m2"
+        }
+      ]
+    },
+    {
+      "name": "a newer read goes",
+      "state": {
+        "sentRead": "m1",
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "m5",
+        "trail": [
+          "m1",
+          "m2",
+          "m4",
+          "m5"
+        ]
+      },
+      "delivered": null,
+      "want": [
+        {
+          "k": "read",
+          "m": "m5"
+        }
+      ]
+    },
+    {
+      "name": "a read whose previous mark is not in the trail goes",
+      "state": {
+        "sentRead": "m0",
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "m2",
+        "trail": [
+          "m1",
+          "m2"
+        ]
+      },
+      "delivered": null,
+      "want": [
+        {
+          "k": "read",
+          "m": "m2"
+        }
+      ]
+    },
+    {
+      "name": "a read whose own message is not in the trail goes",
+      "state": {
+        "sentRead": "m1",
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "m9",
+        "trail": [
+          "m1",
+          "m2"
+        ]
+      },
+      "delivered": null,
+      "want": [
+        {
+          "k": "read",
+          "m": "m9"
+        }
+      ]
+    },
+    {
+      "name": "a read made from the list, with only the unread rows as its trail, goes",
+      "state": {
+        "sentRead": "m1",
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "m4",
+        "trail": [
+          "m3",
+          "m4"
+        ]
+      },
+      "delivered": null,
+      "want": [
+        {
+          "k": "read",
+          "m": "m4"
+        }
+      ]
+    },
+    {
+      "name": "a read already sent is not sent again",
+      "state": {
+        "sentRead": "m2",
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "m2",
+        "trail": [
+          "m1",
+          "m2"
+        ]
+      },
+      "delivered": null,
+      "want": []
+    },
+    {
+      "name": "a read behind the one already sent says nothing new",
+      "state": {
+        "sentRead": "m3",
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "m2",
+        "trail": [
+          "m1",
+          "m2",
+          "m3"
+        ]
+      },
+      "delivered": null,
+      "want": []
+    },
+    {
+      "name": "an empty read sends nothing",
+      "state": {
+        "sentRead": null,
+        "sentDelivered": null
+      },
+      "read": {
+        "m": "",
+        "trail": []
+      },
+      "delivered": null,
+      "want": []
+    },
+    {
+      "name": "a delivered mark goes",
+      "state": {
+        "sentRead": null,
+        "sentDelivered": "m1"
+      },
+      "read": null,
+      "delivered": {
+        "m": "m3"
+      },
+      "want": [
+        {
+          "k": "delivered",
+          "m": "m3"
+        }
+      ]
+    },
+    {
+      "name": "a delivered mark already sent is not sent again",
+      "state": {
+        "sentRead": null,
+        "sentDelivered": "m3"
+      },
+      "read": null,
+      "delivered": {
+        "m": "m3"
+      },
+      "want": []
+    },
+    {
+      "name": "a read on the same message says it arrived",
+      "state": {
+        "sentRead": "m1",
+        "sentDelivered": "m1"
+      },
+      "read": {
+        "m": "m4",
+        "trail": [
+          "m1",
+          "m2",
+          "m4"
+        ]
+      },
+      "delivered": {
+        "m": "m4"
+      },
+      "want": [
+        {
+          "k": "read",
+          "m": "m4"
+        }
+      ]
+    },
+    {
+      "name": "a read past the delivered message in its trail says it arrived",
+      "state": {
+        "sentRead": "m1",
+        "sentDelivered": "m1"
+      },
+      "read": {
+        "m": "m4",
+        "trail": [
+          "m1",
+          "m2",
+          "m4"
+        ]
+      },
+      "delivered": {
+        "m": "m2"
+      },
+      "want": [
+        {
+          "k": "read",
+          "m": "m4"
+        }
+      ]
+    },
+    {
+      "name": "a delivered mark newer than the read goes after it",
+      "state": {
+        "sentRead": "m1",
+        "sentDelivered": "m1"
+      },
+      "read": {
+        "m": "m2",
+        "trail": [
+          "m1",
+          "m2"
+        ]
+      },
+      "delivered": {
+        "m": "m5"
+      },
+      "want": [
+        {
+          "k": "read",
+          "m": "m2"
+        },
+        {
+          "k": "delivered",
+          "m": "m5"
+        }
+      ]
+    },
+    {
+      "name": "a read already sent covers a delivered mark at or behind it",
+      "state": {
+        "sentRead": "m4",
+        "sentDelivered": "m1"
+      },
+      "read": {
+        "m": "m4",
+        "trail": [
+          "m1",
+          "m2",
+          "m4"
+        ]
+      },
+      "delivered": {
+        "m": "m2"
+      },
+      "want": []
+    },
+    {
+      "name": "with no read pending, a delivered mark naming the read already sent is covered",
+      "state": {
+        "sentRead": "m4",
+        "sentDelivered": "m1"
+      },
+      "read": null,
+      "delivered": {
+        "m": "m4"
+      },
+      "want": []
+    },
+    {
+      "name": "a stale read does not go, and the delivered mark past it does",
+      "state": {
+        "sentRead": "m3",
+        "sentDelivered": "m1"
+      },
+      "read": {
+        "m": "m2",
+        "trail": [
+          "m1",
+          "m2",
+          "m3",
+          "m5"
+        ]
+      },
+      "delivered": {
+        "m": "m5"
+      },
+      "want": [
+        {
+          "k": "delivered",
+          "m": "m5"
+        }
+      ]
+    },
+    {
+      "name": "a reaction opened alone sends one delivered mark naming it",
+      "state": {
+        "sentRead": null,
+        "sentDelivered": "m2"
+      },
+      "read": null,
+      "delivered": null,
+      "lane": {
+        "m": "e7"
+      },
+      "want": [
+        {
+          "k": "delivered",
+          "m": "e7",
+          "l": true
+        }
+      ]
+    },
+    {
+      "name": "a message and a reaction in one batch send one mark",
+      "state": {
+        "sentRead": null,
+        "sentDelivered": "m1"
+      },
+      "read": null,
+      "delivered": {
+        "m": "m3"
+      },
+      "lane": {
+        "m": "e4"
+      },
+      "want": [
+        {
+          "k": "delivered",
+          "m": "m3"
+        }
+      ]
+    },
+    {
+      "name": "a lane frame's mark goes when the message's mark was already sent and is covered by a read",
+      "state": {
+        "sentRead": "m3",
+        "sentDelivered": "m3"
+      },
+      "read": {
+        "m": "m3",
+        "trail": [
+          "m1",
+          "m2",
+          "m3"
+        ]
+      },
+      "delivered": {
+        "m": "m3"
+      },
+      "lane": {
+        "m": "e5"
+      },
+      "want": [
+        {
+          "k": "delivered",
+          "m": "e5",
+          "l": true
+        }
+      ]
+    },
+    {
+      "name": "a lane frame's mark goes beside a delivered mark a read already covers",
+      "state": {
+        "sentRead": "m4",
+        "sentDelivered": "m1"
+      },
+      "read": null,
+      "delivered": {
+        "m": "m4"
+      },
+      "lane": {
+        "m": "e6"
+      },
+      "want": [
+        {
+          "k": "delivered",
+          "m": "e6",
+          "l": true
+        }
+      ]
+    },
+    {
+      "name": "a read going out is the batch's one mark, a reaction in it included",
+      "state": {
+        "sentRead": "m1",
+        "sentDelivered": "m1"
+      },
+      "read": {
+        "m": "m4",
+        "trail": [
+          "m1",
+          "m2",
+          "m4"
+        ]
+      },
+      "delivered": null,
+      "lane": {
+        "m": "e5"
+      },
+      "want": [
+        {
+          "k": "read",
+          "m": "m4"
+        }
+      ]
+    }
+  ]
+}

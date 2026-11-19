@@ -1,0 +1,118 @@
+# SPDX-License-Identifier: MIT
+[workspace]
+resolver = "2"
+members = ["core", "cabi", "wasm", "keytrans"]
+
+# Every third-party version is pinned EXACTLY, here, once. Two reasons beyond
+# the usual reproducibility argument:
+#
+#  1. `tls_codec` types are in OpenMLS' public API. A consumer crate that
+#     picks 0.4 while OpenMLS pins 0.5 fails with "multiple different versions
+#     of crate `tls_codec`". Naming it once at the workspace level makes that
+#     skew unrepresentable.
+#  2. An MLS implementation is a wire format. A silent minor bump is a silent
+#     change to what four clients will one day have to agree on byte for byte.
+[workspace.dependencies]
+openmls = "=0.9.0"
+openmls_traits = "=0.6.0"
+openmls_rust_crypto = "=0.6.0"
+openmls_basic_credential = "=0.6.0"
+tls_codec = "=0.5.0"
+# The SQLite backend for `peachy-mls-core`'s KV interface (core/src/sqlite.rs),
+# behind the `sqlite` feature. `bundled` compiles SQLite's own amalgamation in
+# rather than linking the platform's: iOS ships one, Android's NDK sysroot does
+# not reliably, and a group store that reads on one device and not the other is
+# the failure this whole file's pinning exists to make unrepresentable. It also
+# means one SQLite VERSION across all three, which matters because the store's
+# durability promise is a WAL-and-synchronous promise.
+rusqlite = "=0.37.0"
+ed25519-dalek = "=2.2.0"
+base64 = "=0.22.1"
+serde = "=1.0.228"
+serde_json = "=1.0.145"
+thiserror = "=2.0.17"
+hex = "=0.4.3"
+sha2 = "=0.10.9"
+# HMAC-SHA256, for key transparency's commitments (keytrans/src/commitment.rs,
+# draft-ietf-keytrans-protocol-05 §11.6). Already in this graph at this
+# version (HKDF and OpenMLS' provider use it), so the pin adds no code.
+hmac = "=0.12.1"
+# The encrypted account store (core/src/account_store.rs): AES-256-GCM for a
+# record, HKDF-SHA256 for the key it is sealed under, and X25519 over the two
+# devices' Ed25519 keys for the box that carries the account key to a newly
+# approved device. All three were already in this graph (OpenMLS' RustCrypto
+# provider and ed25519-dalek pull them in at exactly these versions), so naming
+# them here adds no code to any build, only a pin. `aes-gcm`'s default features
+# are off at the use site: its `getrandom` feature would drag the 0.2 line's
+# `OsRng` in beside the 0.4 `getrandom::fill` the module already uses.
+aes-gcm = { version = "=0.10.3", default-features = false }
+# Named only to turn on their `zeroize` features, so AES-GCM wipes its AES
+# round keys and GHASH key when a cipher is dropped (core/Cargo.toml). The
+# versions `aes-gcm` already pulls in, so the pins add no code.
+aes = { version = "=0.8.4", default-features = false }
+ghash = { version = "=0.5.1", default-features = false }
+polyval = { version = "=0.6.2", default-features = false }
+hkdf = "=0.12.4"
+curve25519-dalek = "=4.1.3"
+# Constant-time equality, for the bytes a sender chooses and the core compares
+# with something it derived: the envelope's route tag and the device link's
+# commitment. Already in this graph (the AEAD and Ed25519 crates use it), at
+# this version. Default features off: `ConstantTimeEq` on byte slices needs
+# neither `std` nor `i128`.
+subtle = { version = "=2.6.1", default-features = false }
+# Wiping a secret the core keeps in memory when it goes: the X25519 secret
+# that opens device seals (core/src/device_seal.rs). Already in this graph
+# (curve25519-dalek, ed25519-dalek and the AEADs use it), at this version.
+zeroize = { version = "=1.9.0", default-features = false, features = ["alloc"] }
+# Test-only: the X-Wing KEM known-answer test (`core/tests/xwing_vectors.rs`)
+# drives the exact crates OpenMLS' provider reaches 0x004F's KEM through. All
+# three are already in this graph at these versions, under
+# `openmls_rust_crypto`; naming them here pins them and adds no code to any
+# shipped build.
+hpke-rs-crypto = "=0.7.0"
+hpke-rs-rust-crypto = { version = "=0.7.0", features = ["experimental"] }
+x-wing = "=0.1.0"
+# The `log` FACADE, not a logger. Already in this graph because OpenMLS logs
+# through it, so naming it costs no new code. `peachy-mls-core` uses it for the
+# few events a `Result` cannot carry, noticed on the way and asked about by no
+# caller — a remembered group whose state is gone, a credential read inside its
+# grace — each as a fixed sentence that names no group, key or time (the rule is
+# in `core/src/lib.rs`). Whether anything listens is each binding's business.
+log = "=0.4.34"
+# The wasm binding's own set (`wasm/`). `wasm-bindgen` and `wasm-bindgen-test`
+# move in lockstep — wasm-pack downloads the `wasm-bindgen-cli` matching the
+# version resolved here, and a CLI one minor apart from the crate refuses the
+# module — so bump these two together or not at all.
+wasm-bindgen = "=0.2.128"
+wasm-bindgen-test = "=0.3.78"
+# Not `use`d by a line of our code, and not removable: `#[wasm_bindgen]` on an
+# `async fn` EXPANDS to a reference to `wasm_bindgen_futures`, so the crate has
+# to be linked or `MlsClient.open` does not compile. What we call ourselves —
+# `JsFuture`, `future_to_promise` — is taken from `js_sys::futures`, which this
+# is now a thin re-export of; going straight to the source keeps the two from
+# resolving to different copies. Pinned to the wasm-bindgen line above.
+wasm-bindgen-futures = "=0.4.78"
+js-sys = "=0.3.105"
+serde-wasm-bindgen = "=0.6.5"
+serde_bytes = "=0.11.19"
+# 0.4 only. The 0.2 line is also in the tree (via `rand_core` 0.6) and needs a
+# different opt-in on wasm32; it is spelled inline in `wasm/Cargo.toml`,
+# because two versions of one crate cannot both live under this key.
+getrandom = "=0.4.3"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.91"
+license = "MIT"
+repository = "https://github.com/peachysocial/peachy-protocol"
+publish = false
+
+# Release profile for the C ABI shipped into iOS/Android/wasm. `lto = true` and
+# one codegen unit because the static archive is linked into an app binary,
+# where its size is what counts.
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "unwind"
+strip = "debuginfo"

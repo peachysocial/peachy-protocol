@@ -1,0 +1,31 @@
+version = 1
+SPDX-PackageName = "peachy-protocol"
+SPDX-PackageDownloadLocation = "NOASSERTION"
+
+# The copyright holder of everything written for this repository. Source
+# files carry their license in their own SPDX line.
+[[annotations]]
+path = ["mls/**", "proto/**", "docs/**", "README.md", "CONTRIBUTING.md", "SECURITY.md", "REUSE.toml", ".gitignore", "buf.yaml"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Peachy Social, Inc."
+
+# Files whose syntax carries no comment (JSON fixtures, lockfiles, pinned
+# verdicts). Source files carry their own SPDX line.
+[[annotations]]
+path = ["mls/**.json", "mls/**.lock", "mls/**.txt"]
+precedence = "aggregate"
+SPDX-License-Identifier = "MIT"
+
+# X-Wing draft-06 test vectors, copied verbatim from the `x-wing` 0.1.0
+# crate's tests/test-vectors.json (mls/core/tests/vectors/README.md).
+[[annotations]]
+path = "mls/core/tests/vectors/xwing-draft-06.json"
+precedence = "override"
+SPDX-FileCopyrightText = "2024-2026 RustCrypto Developers"
+SPDX-License-Identifier = "MIT"
+
+# The specifications and the repository's own notes.
+[[annotations]]
+path = ["docs/**", "README.md", "CONTRIBUTING.md", "SECURITY.md", "REUSE.toml", ".gitignore", "buf.yaml"]
+precedence = "aggregate"
+SPDX-License-Identifier = "CC0-1.0"

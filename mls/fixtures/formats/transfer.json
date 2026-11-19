@@ -1,0 +1,985 @@
+{
+  "_about": [
+    "Golden cases for the self-note bodies and the history hand-off document a device sends its account's own new device.",
+    "Self-notes: docs/sealed-messages.md §Self-notes.",
+    "The hand-off: docs/sealed-messages.md §Handing history to your own new device.",
+    "The sealing of a self-note is pinned in mls/fixtures/account-store.json; this table pins what is inside.",
+    "Parsing is all this table pins. A pointer whose key is not sealed to the device (`k` or `key` with no `kb`) parses as below and imports nothing: the reader opens only `kb` (docs/sealed-messages.md §Handing history to your own new device).",
+    "`note`: `wire` is a self-note's plaintext. `expect` is null when the reader must ignore it (never an error), else one of {kind: read, g, m, at}, {kind: transfer, ptr, f}, {kind: none, f}, {kind: receipts, g, rc} or {kind: history, d, f}. `ptr` is passed through untouched, a `kb` in it included: the hand-off's key sealed to the device it went to, which that device opens in place of `k` (the box is pinned in mls/fixtures/account-store.json).",
+    "`parse`: `wire` is the decrypted hand-off document. `expect` is null when it is not a document the reader may read, else the conversations to import. A conversation with no `g`, and a message missing `id`, `by` or `at`, or with neither `text` nor attachments, is dropped and the rest survive. `i`, `r` and `read` default to \"\", `b` to false; unknown keys are ignored.",
+    "In a message, `id` is the envelope id, `i`, `r` and `b` the frame's id, reply parent and broadcast flag, `at` epoch milliseconds, and `a` the frame's attachment pointers, passed through. An entry of `a` that is not an object is dropped; an `a` that is not an array is none. A pointer with no `o` or no `k` is an attachment the approver could not hand over.",
+    "`rc` maps a reader's actor id to {r, d}, the read and delivered marks that reader sent, oldest first. Each list keeps its non-empty strings once each, in order, then its newest 16. Present (even {}) means the approver knew; absent means it did not.",
+    "`p` lists the conversation's members as the approver holds them (non-strings and empties dropped, a repeat kept once). `q` is true only for an unanswered message request.",
+    "`f` is the hand-off's format: 1 for words only, 2 with attachments and receipts, 3 with reactions (`re`). A value that is not a positive integer, or none, reads as 1. In the `history` note, `f` is the format the asking device holds, a whole number or else 0.",
+    "In `expect`, an absent `a` means [], `p` means [], `q` means false, and `rc` means absent.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "version": 1,
+  "cases": [
+    {
+      "name": "an ordinary sentence is not a transfer",
+      "call": "parse",
+      "wire": "see you at nine",
+      "expect": null
+    },
+    {
+      "name": "another peachy kind is not a transfer",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2}",
+      "expect": null
+    },
+    {
+      "name": "an unknown version is not a transfer this build may read",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":2,\"conversations\":[]}",
+      "expect": null
+    },
+    {
+      "name": "conversations must be an array",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":{}}",
+      "expect": null
+    },
+    {
+      "name": "an empty transfer is a transfer",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[]}",
+      "expect": {
+        "f": 1,
+        "conversations": []
+      }
+    },
+    {
+      "name": "two conversations, a reply and a missing optional field",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"1a2b3c4d-2222-4333-8444-a55566667777\",\"messages\":[{\"id\":\"0f3c6d2e-1111-4222-8333-944455556666\",\"i\":\"c-1\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000000000,\"text\":\"Ferry at nine?\",\"r\":\"\",\"b\":false},{\"id\":\"1a2b3c4d-2222-4333-8444-a55566667777\",\"i\":\"c-2\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1790000060000,\"text\":\"Yes, see you there\",\"r\":\"c-1\",\"b\":true}]},{\"g\":\"7c1e2f3a-4b5c-4d6e-8f70-819203a4b5c6\",\"read\":\"\",\"messages\":[{\"id\":\"2b3c4d5e-3333-4444-8555-b66677778888\",\"i\":\"c-3\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000120000,\"text\":\"🍑 ok\"}]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "1a2b3c4d-2222-4333-8444-a55566667777",
+            "messages": [
+              {
+                "id": "0f3c6d2e-1111-4222-8333-944455556666",
+                "i": "c-1",
+                "by": "9d8c7b6a-5555-4666-8777-c88899990000",
+                "at": 1790000000000,
+                "text": "Ferry at nine?",
+                "r": "",
+                "b": false
+              },
+              {
+                "id": "1a2b3c4d-2222-4333-8444-a55566667777",
+                "i": "c-2",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1790000060000,
+                "text": "Yes, see you there",
+                "r": "c-1",
+                "b": true
+              }
+            ]
+          },
+          {
+            "g": "7c1e2f3a-4b5c-4d6e-8f70-819203a4b5c6",
+            "read": "",
+            "messages": [
+              {
+                "id": "2b3c4d5e-3333-4444-8555-b66677778888",
+                "i": "c-3",
+                "by": "9d8c7b6a-5555-4666-8777-c88899990000",
+                "at": 1790000120000,
+                "text": "🍑 ok",
+                "r": "",
+                "b": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a conversation with no group id is dropped, the rest survive",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"read\":\"\",\"messages\":[]},{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"messages\":[]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a message missing an id, an author, a time or its text is dropped",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"i\":\"x\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1,\"text\":\"no id\"},{\"id\":\"0f3c6d2e-1111-4222-8333-944455556666\",\"i\":\"x\",\"at\":1,\"text\":\"no author\"},{\"id\":\"1a2b3c4d-2222-4333-8444-a55566667777\",\"i\":\"x\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"text\":\"no time\"},{\"id\":\"2b3c4d5e-3333-4444-8555-b66677778888\",\"i\":\"x\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1},{\"id\":\"2b3c4d5e-3333-4444-8555-b66677778888\",\"i\":\"c-3\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000120000,\"text\":\"kept\",\"extra\":\"ignored\"}]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "2b3c4d5e-3333-4444-8555-b66677778888",
+                "i": "c-3",
+                "by": "9d8c7b6a-5555-4666-8777-c88899990000",
+                "at": 1790000120000,
+                "text": "kept",
+                "r": "",
+                "b": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown keys are ignored at every level",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"future\":true,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"later\":1,\"messages\":[]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a conversation names its people and says it is a request; junk and repeats in p are dropped",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"q\":true,\"p\":[\"9d8c7b6a-5555-4666-8777-c88899990000\",\"\",7,\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"9d8c7b6a-5555-4666-8777-c88899990000\"],\"messages\":[]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "q": true,
+            "p": [
+              "9d8c7b6a-5555-4666-8777-c88899990000",
+              "8c7b6a59-6666-4777-8888-d9990000aaaa"
+            ],
+            "messages": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "q must be true to mean a request",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"q\":1,\"messages\":[]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a photo with no words carries its pointer, and no text",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"3c4d5e6f-4444-4555-8666-c77788889999\",\"i\":\"c-p\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000000000,\"a\":[{\"o\":\"sealed/2f0c1d9e8b7a.bin\",\"k\":\"S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U=\",\"n\":\"AAECAw==\",\"d\":\"ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGk=\",\"s\":48213,\"m\":\"image/jpeg\",\"w\":1200,\"h\":900,\"ms\":0,\"c\":\"#c08060\",\"f\":\"\",\"v\":3,\"cs\":65536}]}]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "3c4d5e6f-4444-4555-8666-c77788889999",
+                "i": "c-p",
+                "by": "9d8c7b6a-5555-4666-8777-c88899990000",
+                "at": 1790000000000,
+                "text": "",
+                "r": "",
+                "b": false,
+                "a": [
+                  {
+                    "o": "sealed/2f0c1d9e8b7a.bin",
+                    "k": "S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U=",
+                    "n": "AAECAw==",
+                    "d": "ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGk=",
+                    "s": 48213,
+                    "m": "image/jpeg",
+                    "w": 1200,
+                    "h": 900,
+                    "ms": 0,
+                    "c": "#c08060",
+                    "f": "",
+                    "v": 3,
+                    "cs": 65536
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "words and two attachments ride together, pointers untouched and in order",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"3c4d5e6f-4444-4555-8666-c77788889999\",\"i\":\"c-p\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000000000,\"text\":\"Tickets and the view\",\"a\":[{\"o\":\"sealed/7a6b5c4d3e2f.bin\",\"k\":\"a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2U=\",\"n\":\"BAUGBw==\",\"d\":\"ZmlsZWZpbGVmaWxlZmlsZWZpbGVmaWxlZmlsZWZpbGU=\",\"s\":9120,\"m\":\"application/pdf\",\"w\":0,\"h\":0,\"ms\":0,\"c\":\"\",\"f\":\"plan.pdf\",\"v\":3,\"cs\":65536},{\"o\":\"sealed/2f0c1d9e8b7a.bin\",\"k\":\"S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U=\",\"n\":\"AAECAw==\",\"d\":\"ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGk=\",\"s\":48213,\"m\":\"image/jpeg\",\"w\":1200,\"h\":900,\"ms\":0,\"c\":\"#c08060\",\"f\":\"\",\"v\":3,\"cs\":65536}]}]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "3c4d5e6f-4444-4555-8666-c77788889999",
+                "i": "c-p",
+                "by": "9d8c7b6a-5555-4666-8777-c88899990000",
+                "at": 1790000000000,
+                "text": "Tickets and the view",
+                "r": "",
+                "b": false,
+                "a": [
+                  {
+                    "o": "sealed/7a6b5c4d3e2f.bin",
+                    "k": "a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2U=",
+                    "n": "BAUGBw==",
+                    "d": "ZmlsZWZpbGVmaWxlZmlsZWZpbGVmaWxlZmlsZWZpbGU=",
+                    "s": 9120,
+                    "m": "application/pdf",
+                    "w": 0,
+                    "h": 0,
+                    "ms": 0,
+                    "c": "",
+                    "f": "plan.pdf",
+                    "v": 3,
+                    "cs": 65536
+                  },
+                  {
+                    "o": "sealed/2f0c1d9e8b7a.bin",
+                    "k": "S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U=",
+                    "n": "AAECAw==",
+                    "d": "ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGk=",
+                    "s": 48213,
+                    "m": "image/jpeg",
+                    "w": 1200,
+                    "h": 900,
+                    "ms": 0,
+                    "c": "#c08060",
+                    "f": "",
+                    "v": 3,
+                    "cs": 65536
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "an attachment the approver could not hand over has no locator and is kept as it came",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"3c4d5e6f-4444-4555-8666-c77788889999\",\"i\":\"c-p\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1790000000000,\"a\":[{\"s\":51200,\"m\":\"image/jpeg\",\"w\":1080,\"h\":1350,\"ms\":0,\"c\":\"#506070\",\"f\":\"\"}]}]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "3c4d5e6f-4444-4555-8666-c77788889999",
+                "i": "c-p",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1790000000000,
+                "text": "",
+                "r": "",
+                "b": false,
+                "a": [
+                  {
+                    "s": 51200,
+                    "m": "image/jpeg",
+                    "w": 1080,
+                    "h": 1350,
+                    "ms": 0,
+                    "c": "#506070",
+                    "f": ""
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "entries of a that are not objects are dropped; an a that is not an array is none",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"3c4d5e6f-4444-4555-8666-c77788889999\",\"i\":\"c-1\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000000000,\"text\":\"one\",\"a\":[{\"o\":\"sealed/2f0c1d9e8b7a.bin\",\"k\":\"S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U=\",\"n\":\"AAECAw==\",\"d\":\"ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGk=\",\"s\":48213,\"m\":\"image/jpeg\",\"w\":1200,\"h\":900,\"ms\":0,\"c\":\"#c08060\",\"f\":\"\",\"v\":3,\"cs\":65536},5,\"x\",null,[1]]},{\"id\":\"4d5e6f70-5555-4666-8777-d88899990000\",\"i\":\"c-2\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000060000,\"text\":\"two\",\"a\":{\"o\":\"x\"}}]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "3c4d5e6f-4444-4555-8666-c77788889999",
+                "i": "c-1",
+                "by": "9d8c7b6a-5555-4666-8777-c88899990000",
+                "at": 1790000000000,
+                "text": "one",
+                "r": "",
+                "b": false,
+                "a": [
+                  {
+                    "o": "sealed/2f0c1d9e8b7a.bin",
+                    "k": "S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U=",
+                    "n": "AAECAw==",
+                    "d": "ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGlnZXN0ZGk=",
+                    "s": 48213,
+                    "m": "image/jpeg",
+                    "w": 1200,
+                    "h": 900,
+                    "ms": 0,
+                    "c": "#c08060",
+                    "f": "",
+                    "v": 3,
+                    "cs": 65536
+                  }
+                ]
+              },
+              {
+                "id": "4d5e6f70-5555-4666-8777-d88899990000",
+                "i": "c-2",
+                "by": "9d8c7b6a-5555-4666-8777-c88899990000",
+                "at": 1790000060000,
+                "text": "two",
+                "r": "",
+                "b": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a message with neither words nor an attachment is dropped",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"3c4d5e6f-4444-4555-8666-c77788889999\",\"i\":\"c-1\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000000000,\"a\":[]},{\"id\":\"4d5e6f70-5555-4666-8777-d88899990000\",\"i\":\"c-2\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000060000,\"a\":[7]},{\"id\":\"5e6f7081-6666-4777-8888-e99900001111\",\"i\":\"c-3\",\"by\":\"9d8c7b6a-5555-4666-8777-c88899990000\",\"at\":1790000120000,\"text\":9,\"a\":\"x\"}]}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a conversation carries the marks its readers sent; junk is dropped, a repeat kept once, order kept",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[],\"rc\":{\"8c7b6a59-6666-4777-8888-d9990000aaaa\":{\"r\":[\"c-1\",\"\",3,\"c-2\",\"c-1\"],\"d\":[\"c-2\"],\"x\":1},\"7b6a5948-7777-4888-8999-e0001111bbbb\":{\"d\":[\"c-1\"]},\"\":{\"r\":[\"c-1\"]},\"7c1e2f3a-0000-4000-8000-000000000000\":7,\"6a59483b-8888-4999-8aaa-f1112222cccc\":{\"r\":\"c-1\",\"d\":[]}}}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [],
+            "rc": {
+              "8c7b6a59-6666-4777-8888-d9990000aaaa": {
+                "r": [
+                  "c-1",
+                  "c-2"
+                ],
+                "d": [
+                  "c-2"
+                ]
+              },
+              "7b6a5948-7777-4888-8999-e0001111bbbb": {
+                "r": [],
+                "d": [
+                  "c-1"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "a reader keeps the newest sixteen marks of each kind",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[],\"rc\":{\"8c7b6a59-6666-4777-8888-d9990000aaaa\":{\"r\":[\"c-1\",\"c-2\",\"c-3\",\"c-4\",\"c-5\",\"c-6\",\"c-7\",\"c-8\",\"c-9\",\"c-10\",\"c-11\",\"c-12\",\"c-13\",\"c-14\",\"c-15\",\"c-16\",\"c-17\",\"c-18\"],\"d\":[]}}}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [],
+            "rc": {
+              "8c7b6a59-6666-4777-8888-d9990000aaaa": {
+                "r": [
+                  "c-3",
+                  "c-4",
+                  "c-5",
+                  "c-6",
+                  "c-7",
+                  "c-8",
+                  "c-9",
+                  "c-10",
+                  "c-11",
+                  "c-12",
+                  "c-13",
+                  "c-14",
+                  "c-15",
+                  "c-16",
+                  "c-17",
+                  "c-18"
+                ],
+                "d": []
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "an empty rc says the approver knew of no marks, which is not the same as not saying",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[],\"rc\":{}}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [],
+            "rc": {}
+          }
+        ]
+      }
+    },
+    {
+      "name": "an rc that is not an object is as if absent",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[],\"rc\":[]},{\"g\":\"7c1e2f3a-4b5c-4d6e-8f70-819203a4b5c6\",\"read\":\"\",\"messages\":[],\"rc\":\"x\"}]}",
+      "expect": {
+        "f": 1,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": []
+          },
+          {
+            "g": "7c1e2f3a-4b5c-4d6e-8f70-819203a4b5c6",
+            "read": "",
+            "messages": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a read note",
+      "call": "note",
+      "wire": "{\"peachy\":\"read\",\"v\":1,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"m\":\"1a2b3c4d-2222-4333-8444-a55566667777\",\"at\":1790000060000}",
+      "expect": {
+        "kind": "read",
+        "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+        "m": "1a2b3c4d-2222-4333-8444-a55566667777",
+        "at": 1790000060000
+      }
+    },
+    {
+      "name": "a read note with no time is not a note this build may read",
+      "call": "note",
+      "wire": "{\"peachy\":\"read\",\"v\":1,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"m\":\"1a2b3c4d-2222-4333-8444-a55566667777\"}",
+      "expect": null
+    },
+    {
+      "name": "a read note of another version is ignored",
+      "call": "note",
+      "wire": "{\"peachy\":\"read\",\"v\":2,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"m\":\"1a2b3c4d-2222-4333-8444-a55566667777\",\"at\":1}",
+      "expect": null
+    },
+    {
+      "name": "a bare-key transfer pointer (no kb) parses through untouched, and imports nothing",
+      "call": "note",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"ptr\":{\"k\":\"uploads/abc\",\"key\":\"AAAA\",\"sha256\":\"BBBB\",\"size\":1234,\"mime\":\"application/json\"}}",
+      "expect": {
+        "kind": "transfer",
+        "ptr": {
+          "k": "uploads/abc",
+          "key": "AAAA",
+          "sha256": "BBBB",
+          "size": 1234,
+          "mime": "application/json"
+        },
+        "f": 1
+      }
+    },
+    {
+      "name": "a transfer pointer whose key is sealed to the device (kb) comes through untouched, for the device to open",
+      "call": "note",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":3,\"ptr\":{\"v\":3,\"o\":\"sealed/abc.bin\",\"kb\":\"AQID\",\"n\":\"BBBB\",\"d\":\"CCCC\",\"s\":1234,\"m\":\"application/json\"}}",
+      "expect": {
+        "kind": "transfer",
+        "ptr": {
+          "v": 3,
+          "o": "sealed/abc.bin",
+          "kb": "AQID",
+          "n": "BBBB",
+          "d": "CCCC",
+          "s": 1234,
+          "m": "application/json"
+        },
+        "f": 3
+      }
+    },
+    {
+      "name": "a transfer note with no pointer is ignored",
+      "call": "note",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1}",
+      "expect": null
+    },
+    {
+      "name": "a transfer note saying there is nothing to hand over",
+      "call": "note",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"none\":true}",
+      "expect": {
+        "kind": "none",
+        "f": 1
+      }
+    },
+    {
+      "name": "none must be true to mean nothing is coming",
+      "call": "note",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"none\":1}",
+      "expect": null
+    },
+    {
+      "name": "a receipts note hands one conversation's marks to a device just seated in it",
+      "call": "note",
+      "wire": "{\"peachy\":\"receipts\",\"v\":1,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"rc\":{\"8c7b6a59-6666-4777-8888-d9990000aaaa\":{\"r\":[\"c-2\"],\"d\":[\"c-2\",\"\",4]},\"7b6a5948-7777-4888-8999-e0001111bbbb\":1}}",
+      "expect": {
+        "kind": "receipts",
+        "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+        "rc": {
+          "8c7b6a59-6666-4777-8888-d9990000aaaa": {
+            "r": [
+              "c-2"
+            ],
+            "d": [
+              "c-2"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "a receipts note with no group is ignored",
+      "call": "note",
+      "wire": "{\"peachy\":\"receipts\",\"v\":1,\"rc\":{}}",
+      "expect": null
+    },
+    {
+      "name": "a receipts note whose rc is not an object is ignored",
+      "call": "note",
+      "wire": "{\"peachy\":\"receipts\",\"v\":1,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"rc\":[]}",
+      "expect": null
+    },
+    {
+      "name": "a receipts note of another version is ignored",
+      "call": "note",
+      "wire": "{\"peachy\":\"receipts\",\"v\":2,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"rc\":{}}",
+      "expect": null
+    },
+    {
+      "name": "a receipts note carries the reactions decided in the group, clears included",
+      "call": "note",
+      "wire": "{\"peachy\":\"receipts\",\"v\":1,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"rc\":{},\"re\":{\"c-1\":[{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"❤️\",\"s\":1761629400000000,\"at\":1761629400000},{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\",\"x\":true,\"s\":1761629460000001,\"at\":1761629460000}],\"c-2\":[{\"by\":\"6a59483b-8888-4999-8aaa-f1112222cccc\",\"e\":\"👍\",\"s\":1761629500000000,\"at\":1761629500000}]}}",
+      "expect": {
+        "kind": "receipts",
+        "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+        "rc": {},
+        "re": {
+          "c-1": [
+            {
+              "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+              "e": "❤️",
+              "s": 1761629400000000,
+              "at": 1761629400000
+            },
+            {
+              "by": "7b6a5948-7777-4888-8999-e0001111bbbb",
+              "x": true,
+              "s": 1761629460000001,
+              "at": 1761629460000
+            }
+          ],
+          "c-2": [
+            {
+              "by": "6a59483b-8888-4999-8aaa-f1112222cccc",
+              "e": "👍",
+              "s": 1761629500000000,
+              "at": 1761629500000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a note's reaction with no reactor, not one emoji and no clear, or not an object is dropped; x true is a clear; a repeated reactor keeps the first; a frame id left with none is dropped",
+      "call": "note",
+      "wire": "{\"peachy\":\"receipts\",\"v\":1,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"rc\":{},\"re\":{\"c-1\":[{\"e\":\"❤️\",\"s\":1,\"at\":1},{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"hi\",\"s\":1,\"at\":1},{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"x\":\"true\",\"s\":1,\"at\":1},7,{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"🎉\",\"s\":-1,\"at\":1.5},{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"❤️\",\"s\":2,\"at\":2},{\"by\":\"6a59483b-8888-4999-8aaa-f1112222cccc\",\"x\":true,\"e\":\"❤️\",\"s\":3,\"at\":3}],\"c-2\":[{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\"}],\"c-3\":\"x\",\"\":[{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"❤️\",\"s\":1,\"at\":1}]}}",
+      "expect": {
+        "kind": "receipts",
+        "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+        "rc": {},
+        "re": {
+          "c-1": [
+            {
+              "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+              "e": "🎉",
+              "s": 0,
+              "at": 0
+            },
+            {
+              "by": "6a59483b-8888-4999-8aaa-f1112222cccc",
+              "x": true,
+              "s": 3,
+              "at": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a receipts note whose re is not an object carries no reactions, and still its marks",
+      "call": "note",
+      "wire": "{\"peachy\":\"receipts\",\"v\":1,\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"rc\":{\"8c7b6a59-6666-4777-8888-d9990000aaaa\":{\"r\":[\"c-2\"]}},\"re\":[{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"❤️\",\"s\":1,\"at\":1}]}",
+      "expect": {
+        "kind": "receipts",
+        "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+        "rc": {
+          "8c7b6a59-6666-4777-8888-d9990000aaaa": {
+            "r": [
+              "c-2"
+            ],
+            "d": []
+          }
+        }
+      }
+    },
+    {
+      "name": "an unknown note kind is ignored, never an error",
+      "call": "note",
+      "wire": "{\"peachy\":\"settings\",\"v\":1}",
+      "expect": null
+    },
+    {
+      "name": "a note that is not JSON is ignored",
+      "call": "note",
+      "wire": "hello",
+      "expect": null
+    },
+    {
+      "name": "a document says its format",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":2,\"conversations\":[]}",
+      "expect": {
+        "f": 2,
+        "conversations": []
+      }
+    },
+    {
+      "name": "a format that is not a positive integer reads as 1, words only",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":\"2\",\"conversations\":[]}",
+      "expect": {
+        "f": 1,
+        "conversations": []
+      }
+    },
+    {
+      "name": "a format of zero reads as 1",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":0,\"conversations\":[]}",
+      "expect": {
+        "f": 1,
+        "conversations": []
+      }
+    },
+    {
+      "name": "a transfer note carries its document's format (a bare-key pointer: it parses, and imports nothing)",
+      "call": "note",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":2,\"ptr\":{\"v\":3,\"o\":\"attachments/u/doc.bin\",\"k\":\"AAAA\",\"n\":\"BBBB\",\"d\":\"CCCC\",\"s\":99,\"m\":\"application/json\"}}",
+      "expect": {
+        "kind": "transfer",
+        "ptr": {
+          "v": 3,
+          "o": "attachments/u/doc.bin",
+          "k": "AAAA",
+          "n": "BBBB",
+          "d": "CCCC",
+          "s": 99,
+          "m": "application/json"
+        },
+        "f": 2
+      }
+    },
+    {
+      "name": "so does the nothing-to-send note",
+      "call": "note",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":2,\"none\":true}",
+      "expect": {
+        "kind": "none",
+        "f": 2
+      }
+    },
+    {
+      "name": "a device asks a sibling for history, saying what it holds",
+      "call": "note",
+      "wire": "{\"peachy\":\"history\",\"v\":1,\"d\":\"bbbbbbbb-0000-4000-8000-000000000002\",\"f\":1}",
+      "expect": {
+        "kind": "history",
+        "d": "bbbbbbbb-0000-4000-8000-000000000002",
+        "f": 1
+      }
+    },
+    {
+      "name": "an ask with no format holds nothing",
+      "call": "note",
+      "wire": "{\"peachy\":\"history\",\"v\":1,\"d\":\"bbbbbbbb-0000-4000-8000-000000000002\"}",
+      "expect": {
+        "kind": "history",
+        "d": "bbbbbbbb-0000-4000-8000-000000000002",
+        "f": 0
+      }
+    },
+    {
+      "name": "an ask whose format is not a whole number holds nothing",
+      "call": "note",
+      "wire": "{\"peachy\":\"history\",\"v\":1,\"d\":\"bbbbbbbb-0000-4000-8000-000000000002\",\"f\":-1}",
+      "expect": {
+        "kind": "history",
+        "d": "bbbbbbbb-0000-4000-8000-000000000002",
+        "f": 0
+      }
+    },
+    {
+      "name": "an ask naming no device is ignored",
+      "call": "note",
+      "wire": "{\"peachy\":\"history\",\"v\":1,\"f\":1}",
+      "expect": null
+    },
+    {
+      "name": "an ask of another version is ignored",
+      "call": "note",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"d\":\"bbbbbbbb-0000-4000-8000-000000000002\",\"f\":1}",
+      "expect": null
+    },
+    {
+      "name": "a message carries its reactions: who, which emoji, the lane position that decided it, and when",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":3,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"env-c-1\",\"i\":\"c-1\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1761629400000,\"text\":\"hi\",\"r\":\"\",\"b\":false,\"re\":[{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\",\"e\":\"❤️\",\"s\":1761629400000000,\"at\":1761629400000},{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"👍\",\"s\":1761629460000003,\"at\":1761629460000}]}],\"rc\":{}}]}",
+      "expect": {
+        "f": 3,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "env-c-1",
+                "i": "c-1",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1761629400000,
+                "text": "hi",
+                "r": "",
+                "b": false,
+                "re": [
+                  {
+                    "by": "7b6a5948-7777-4888-8999-e0001111bbbb",
+                    "e": "❤️",
+                    "s": 1761629400000000,
+                    "at": 1761629400000
+                  },
+                  {
+                    "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                    "e": "👍",
+                    "s": 1761629460000003,
+                    "at": 1761629460000
+                  }
+                ]
+              }
+            ],
+            "rc": {}
+          }
+        ]
+      }
+    },
+    {
+      "name": "a reaction with no reactor, not exactly one emoji, or not an object is dropped; a repeated reactor keeps the first; order is kept",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":3,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"env-c-1\",\"i\":\"c-1\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1761629400000,\"text\":\"hi\",\"r\":\"\",\"b\":false,\"re\":[{\"by\":\"\",\"e\":\"❤️\",\"s\":1761629400000000,\"at\":1761629400000},{\"by\":\"6a59483b-8888-4999-8aaa-f1112222cccc\",\"e\":\"hi\",\"s\":1761629400000000,\"at\":1761629400000},7,{\"by\":\"6a59483b-8888-4999-8aaa-f1112222cccc\",\"e\":\"❤️❤️\",\"s\":1761629400000000,\"at\":1761629400000},{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\",\"e\":\"😂\",\"s\":1761629460000003,\"at\":1761629460000},{\"by\":\"6a59483b-8888-4999-8aaa-f1112222cccc\"},{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\",\"e\":\"❤️\",\"s\":1761629460000008,\"at\":1761629460000},{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"❤️\",\"s\":1761629400000000,\"at\":1761629400000,\"x\":true}]}],\"rc\":{}}]}",
+      "expect": {
+        "f": 3,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "env-c-1",
+                "i": "c-1",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1761629400000,
+                "text": "hi",
+                "r": "",
+                "b": false,
+                "re": [
+                  {
+                    "by": "7b6a5948-7777-4888-8999-e0001111bbbb",
+                    "e": "😂",
+                    "s": 1761629460000003,
+                    "at": 1761629460000
+                  },
+                  {
+                    "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                    "e": "❤️",
+                    "s": 1761629400000000,
+                    "at": 1761629400000
+                  }
+                ]
+              }
+            ],
+            "rc": {}
+          }
+        ]
+      }
+    },
+    {
+      "name": "a position or a time that is not a whole number from 0 reads as 0",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":3,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"env-c-1\",\"i\":\"c-1\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1761629400000,\"text\":\"hi\",\"r\":\"\",\"b\":false,\"re\":[{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"❤️\",\"s\":\"5\",\"at\":-1},{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\",\"e\":\"❤️\",\"s\":1.5,\"at\":true},{\"by\":\"6a59483b-8888-4999-8aaa-f1112222cccc\",\"e\":\"❤️\"}]}],\"rc\":{}}]}",
+      "expect": {
+        "f": 3,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "env-c-1",
+                "i": "c-1",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1761629400000,
+                "text": "hi",
+                "r": "",
+                "b": false,
+                "re": [
+                  {
+                    "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                    "e": "❤️",
+                    "s": 0,
+                    "at": 0
+                  },
+                  {
+                    "by": "7b6a5948-7777-4888-8999-e0001111bbbb",
+                    "e": "❤️",
+                    "s": 0,
+                    "at": 0
+                  },
+                  {
+                    "by": "6a59483b-8888-4999-8aaa-f1112222cccc",
+                    "e": "❤️",
+                    "s": 0,
+                    "at": 0
+                  }
+                ]
+              }
+            ],
+            "rc": {}
+          }
+        ]
+      }
+    },
+    {
+      "name": "a message with no frame id carries no reactions, and an re that is not an array is none",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":3,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[{\"id\":\"env-none\",\"i\":\"\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1761629400000,\"text\":\"hi\",\"r\":\"\",\"b\":false,\"re\":[{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\",\"e\":\"❤️\",\"s\":1761629400000000,\"at\":1761629400000},{\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"e\":\"👍\",\"s\":1761629460000003,\"at\":1761629460000}]},{\"id\":\"env-c-2\",\"i\":\"c-2\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1761629400000,\"text\":\"hi\",\"r\":\"\",\"b\":false,\"re\":{\"by\":\"7b6a5948-7777-4888-8999-e0001111bbbb\",\"e\":\"❤️\"}},{\"id\":\"env-c-3\",\"i\":\"c-3\",\"by\":\"8c7b6a59-6666-4777-8888-d9990000aaaa\",\"at\":1761629400000,\"text\":\"hi\",\"r\":\"\",\"b\":false,\"re\":[]}],\"rc\":{}}]}",
+      "expect": {
+        "f": 3,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [
+              {
+                "id": "env-none",
+                "i": "",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1761629400000,
+                "text": "hi",
+                "r": "",
+                "b": false
+              },
+              {
+                "id": "env-c-2",
+                "i": "c-2",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1761629400000,
+                "text": "hi",
+                "r": "",
+                "b": false
+              },
+              {
+                "id": "env-c-3",
+                "i": "c-3",
+                "by": "8c7b6a59-6666-4777-8888-d9990000aaaa",
+                "at": 1761629400000,
+                "text": "hi",
+                "r": "",
+                "b": false
+              }
+            ],
+            "rc": {}
+          }
+        ]
+      }
+    },
+    {
+      "name": "a format-3 document says so",
+      "call": "parse",
+      "wire": "{\"peachy\":\"transfer\",\"v\":1,\"f\":3,\"conversations\":[{\"g\":\"5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11\",\"read\":\"\",\"messages\":[],\"rc\":{}}]}",
+      "expect": {
+        "f": 3,
+        "conversations": [
+          {
+            "g": "5b0f5a52-8a55-4a5b-9d59-1b9a7a3f0c11",
+            "read": "",
+            "messages": [],
+            "rc": {}
+          }
+        ]
+      }
+    }
+  ]
+}

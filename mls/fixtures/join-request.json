@@ -1,0 +1,930 @@
+{
+  "version": 1,
+  "about": [
+    "The golden fixture for signed join requests (mls/core/src/join_request.rs).",
+    "A request to be seated in a group - an open community room's join inbox, or a",
+    "rejoin - is signed by the asking device's own Ed25519 key, the key its Peachy",
+    "credential binds and its MLS leaf signs with. The admitting device checks the",
+    "signature against the key package it fetched to seat the asker, so a member can",
+    "only ever ask to seat THEMSELF.",
+    "",
+    "The signed bytes bind the group, the actor, the device, the time and a 16-byte",
+    "nonce. A proof is 89 bytes: 0x01, i64be issued_at, the nonce, the signature.",
+    "A verifier honours one for a day and allows 60 seconds of clock skew.",
+    "",
+    "Verdicts, and the order they are checked in: credential_rejected (the key",
+    "package identifies nobody), malformed, identity_mismatch, bad_signature, then the",
+    "clock (stale, from_the_future). Signature before clock, so a forger is never told",
+    "their request is merely old. Membership comes last: not_a_member is a request",
+    "that holds in every other way from a person who holds no leaf in the reader's",
+    "own copy of the group, is not the reader's own person, and is not among the",
+    "people the reader names as still being added (`pendingActors`). The reader in",
+    "these cases holds no copy of any group, so an asker is a member here only when",
+    "the case names them: the people the reader itself invited. A",
+    "signed ask proves who is asking, never that they belong.",
+    "",
+    "Seeds, never keys: 0707..07 is the issuer's stand-in, 1111..11 is Ada's phone,",
+    "2222..22 is Mallory, a community member forging for Ada, and 0808..08 an issuer",
+    "nobody trusts. The clock is pinned: nowUnix 1789516800.",
+    "Every case carries exactly one of expect and expectError."
+  ],
+  "cases": [
+    {
+      "id": "statement/ordinary",
+      "kind": "join_request",
+      "why": "The exact bytes Ada's phone signs to ask for a seat in the room: domain, NUL, then group, actor and device each behind a four-byte big-endian length, then the time as a big-endian i64 and the 16-byte nonce.",
+      "call": "statement",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expect": {
+        "statementHex": "7065616368792d6a6f696e2d726571756573742d7631000000002433663163326238652d376134312d346432632d396231652d303030303030303030303031000000096163746f722d616461000000106465766963652d6164612d70686f6e65000000006aa9dc005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      },
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "statement/another-room",
+      "kind": "join_request",
+      "why": "The same request for another room is different bytes, which is what stops a request for one room being replayed into another.",
+      "call": "statement",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expect": {
+        "statementHex": "7065616368792d6a6f696e2d726571756573742d7631000000002433663163326238652d376134312d346432632d396231652d303030303030303030303032000000096163746f722d616461000000106465766963652d6164612d70686f6e65000000006aa9dc005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      },
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000002",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "statement/an-empty-group-id",
+      "kind": "join_request",
+      "why": "No group is not a request for one. A refusal, not a verdict.",
+      "call": "statement",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expectError": "group_id",
+      "groupId": "",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "statement/an-empty-actor-id",
+      "kind": "join_request",
+      "why": "A request that names nobody is a caller mistake.",
+      "call": "statement",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expectError": "actor_id",
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "statement/an-empty-device-id",
+      "kind": "join_request",
+      "why": "A request from no device is a caller mistake.",
+      "call": "statement",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expectError": "device_id",
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": ""
+    },
+    {
+      "id": "statement/a-short-nonce",
+      "kind": "join_request",
+      "why": "The nonce is exactly 16 bytes.",
+      "call": "statement",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expectError": "nonce",
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "sign/ordinary",
+      "kind": "join_request",
+      "why": "The 89-byte proof: version 1, the time, the nonce and the deterministic Ed25519 signature (RFC 8032).",
+      "call": "sign",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expect": {
+        "proofHex": "01000000006aa9dc005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a94daa93d93f1c2ff8c13b339e7f0b73892585baf659853f7ad48350a06501133eb7863c098d8e787a6cfe37ff236757c8e181dc8daed8e7c36f00729e99b580d"
+      },
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "sign/another-nonce",
+      "kind": "join_request",
+      "why": "A second request from the same device in the same second is a different proof.",
+      "call": "sign",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "issuedAt": 1789516800,
+      "nonceHex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+      "expect": {
+        "proofHex": "01000000006aa9dc00a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5b47981c83c8b5e1dc707c904c509cd0f7e78355411c09bd9f28c9ba845200a71d854288c652305a4da1cb51cd3a7c95e80fa42de5b8c0fecc2e193ccac132a0f"
+      },
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "sign/a-short-seed",
+      "kind": "join_request",
+      "why": "A seed is exactly 32 bytes.",
+      "call": "sign",
+      "seedHex": "11111111111111111111111111111111111111111111111111111111111111",
+      "issuedAt": 1789516800,
+      "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expectError": "seed",
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone"
+    },
+    {
+      "id": "accepted/ada-asks-for-herself",
+      "kind": "join_request",
+      "why": "Ada's phone signs its own request; the admitting device checks it against the key package it fetched to seat her.",
+      "expect": {
+        "verdict": "accepted",
+        "verdictCode": 0
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      },
+      "pendingActors": [
+        "actor-ada"
+      ]
+    },
+    {
+      "id": "not_a_member/an-ex-member-asks-back-in",
+      "kind": "join_request",
+      "why": "Ada's request holds in every other way, but she holds no leaf in the reader's copy of the group and the reader is not adding her: a removed member signs a seat ask as well as anybody, and is not seated by one.",
+      "expect": {
+        "verdict": "not_a_member",
+        "verdictCode": 7
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "not_a_member/the-reader-is-adding-somebody-else",
+      "kind": "join_request",
+      "why": "The reader names who it is still trying to add; naming somebody else does not let Ada in.",
+      "expect": {
+        "verdict": "not_a_member",
+        "verdictCode": 7
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      },
+      "pendingActors": [
+        "actor-bo"
+      ]
+    },
+    {
+      "id": "accepted/a-day-old-exactly",
+      "kind": "join_request",
+      "why": "The oldest request still honoured: signed exactly one day before the verifier's clock.",
+      "expect": {
+        "verdict": "accepted",
+        "verdictCode": 0
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789430400,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      },
+      "pendingActors": [
+        "actor-ada"
+      ]
+    },
+    {
+      "id": "accepted/sixty-seconds-ahead",
+      "kind": "join_request",
+      "why": "The asker's clock may run up to 60 seconds ahead of the verifier's, the same skew the credential check allows.",
+      "expect": {
+        "verdict": "accepted",
+        "verdictCode": 0
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516860,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      },
+      "pendingActors": [
+        "actor-ada"
+      ]
+    },
+    {
+      "id": "stale/a-day-and-a-second-old",
+      "kind": "join_request",
+      "why": "A request copied out of an inbox stops working a day after it was signed.",
+      "expect": {
+        "verdict": "stale",
+        "verdictCode": 5
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789430399,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "from_the_future/sixty-one-seconds-ahead",
+      "kind": "join_request",
+      "why": "Signed further ahead than the skew allows.",
+      "expect": {
+        "verdict": "from_the_future",
+        "verdictCode": 6
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516861,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "bad_signature/a-member-signs-for-ada",
+      "kind": "join_request",
+      "why": "THE ATTACK THIS TABLE EXISTS FOR. Mallory, a community member, asks to seat Ada and signs with her own key. The admitting device fetched Ada's key package, and Mallory's signature does not verify under Ada's key.",
+      "expect": {
+        "verdict": "bad_signature",
+        "verdictCode": 4
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "bad_signature/signed-for-another-room",
+      "kind": "join_request",
+      "why": "Ada's genuine request for another room, replayed into this room's inbox.",
+      "expect": {
+        "verdict": "bad_signature",
+        "verdictCode": 4
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000002"
+      }
+    },
+    {
+      "id": "bad_signature/signed-for-another-device",
+      "kind": "join_request",
+      "why": "Ada's laptop's request re-labelled as her phone's.",
+      "expect": {
+        "verdict": "bad_signature",
+        "verdictCode": 4
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "deviceId": "device-ada-laptop"
+      }
+    },
+    {
+      "id": "bad_signature/signed-as-another-actor",
+      "kind": "join_request",
+      "why": "A proof whose signed actor is not the claimed one.",
+      "expect": {
+        "verdict": "bad_signature",
+        "verdictCode": 4
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "actorId": "actor-mallory"
+      }
+    },
+    {
+      "id": "identity_mismatch/the-claim-names-another-device",
+      "kind": "join_request",
+      "why": "The key package is Ada's phone's; the claim names her laptop. The seat goes only to the device whose credential signed.",
+      "expect": {
+        "verdict": "identity_mismatch",
+        "verdictCode": 3
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-laptop",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "deviceId": "device-ada-laptop"
+      }
+    },
+    {
+      "id": "identity_mismatch/the-claim-names-another-person",
+      "kind": "join_request",
+      "why": "A key package for somebody other than the person the request names. What a directory answering the wrong question looks like.",
+      "expect": {
+        "verdict": "identity_mismatch",
+        "verdictCode": 3
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-bob",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "actorId": "actor-bob"
+      }
+    },
+    {
+      "id": "malformed/no-proof",
+      "kind": "join_request",
+      "why": "An unsigned request. There is no compatibility for one: every request is signed.",
+      "expect": {
+        "verdict": "malformed",
+        "verdictCode": 1
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proofHex": ""
+    },
+    {
+      "id": "malformed/a-byte-short",
+      "kind": "join_request",
+      "why": "88 bytes is not a proof.",
+      "expect": {
+        "verdict": "malformed",
+        "verdictCode": 1
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proofHex": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "malformed/version-two",
+      "kind": "join_request",
+      "why": "A proof of a version this build does not read is refused, not read with today's rules.",
+      "expect": {
+        "verdict": "malformed",
+        "verdictCode": 1
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proofHex": "0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "credential_rejected/an-issuer-the-verifier-does-not-trust",
+      "kind": "join_request",
+      "why": "Ada's credential names an issuer the verifier has never been told about, so the key package identifies nobody.",
+      "expect": {
+        "verdict": "credential_rejected",
+        "verdictCode": 2
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0808080808080808080808080808080808080808080808080808080808080808"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "credential_rejected/an-expired-credential",
+      "kind": "join_request",
+      "why": "A key package whose credential expired before the verifier's clock.",
+      "expect": {
+        "verdict": "credential_rejected",
+        "verdictCode": 2
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789509600,
+        "expiresAt": 1789516740,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "credential_rejected/not-a-key-package",
+      "kind": "join_request",
+      "why": "Bytes that are not a key package at all.",
+      "expect": {
+        "verdict": "credential_rejected",
+        "verdictCode": 2
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "keyPackageHex": "00010203",
+      "proof": {
+        "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "order/forged-and-stale",
+      "kind": "join_request",
+      "why": "Signature before clock: a forger is told the signature is bad, never that the request is merely old.",
+      "expect": {
+        "verdict": "bad_signature",
+        "verdictCode": 4
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "issuedAt": 1789426800,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "order/mismatched-and-forged",
+      "kind": "join_request",
+      "why": "Identity before signature: a request for a device the key package is not is answered as that.",
+      "expect": {
+        "verdict": "identity_mismatch",
+        "verdictCode": 3
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-laptop",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "issuedAt": 1789516770,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "deviceId": "device-ada-laptop"
+      }
+    },
+    {
+      "id": "order/malformed-and-mismatched",
+      "kind": "join_request",
+      "why": "A proof that cannot be read is malformed whatever else is wrong.",
+      "expect": {
+        "verdict": "malformed",
+        "verdictCode": 1
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-bob",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proofHex": ""
+    },
+    {
+      "id": "order/credential-before-everything",
+      "kind": "join_request",
+      "why": "A key package that identifies nobody is answered first.",
+      "expect": {
+        "verdict": "credential_rejected",
+        "verdictCode": 2
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "keyPackageHex": "00",
+      "proofHex": ""
+    },
+    {
+      "id": "order/forged-and-not-a-member",
+      "kind": "join_request",
+      "why": "Membership is judged last: a forged request from a non-member is told it is forged, never that it is merely from a non-member.",
+      "expect": {
+        "verdict": "bad_signature",
+        "verdictCode": 4
+      },
+      "call": "verify",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "actorId": "actor-ada",
+      "deviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "proof": {
+        "seedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "issuedAt": 1789426800,
+        "nonceHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "roundTrip/a-client-signs-and-a-client-verifies",
+      "kind": "join_request",
+      "why": "The client door signs with its own clock and a fresh random nonce; another client verifies against the asker's key package. The one call whose bytes cannot be pinned, so the one that proves the two doors agree.",
+      "call": "roundTrip",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "verdict": "accepted",
+        "verdictCode": 0
+      },
+      "pendingActors": [
+        "actor-ada"
+      ]
+    },
+    {
+      "id": "roundTrip/signed-a-day-and-a-second-ago",
+      "kind": "join_request",
+      "why": "The asker's clock is a day and a second behind the verifier's.",
+      "call": "roundTrip",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "groupId": "3f1c2b8e-7a41-4d2c-9b1e-000000000001",
+      "signedAtUnix": 1789430399,
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-phone",
+        "deviceSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+        "issuedAt": 1789426800,
+        "expiresAt": 1791516800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "verdict": "stale",
+        "verdictCode": 5
+      }
+    }
+  ]
+}

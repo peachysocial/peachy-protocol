@@ -1,0 +1,259 @@
+(* SPDX-License-Identifier: MIT *)
+(* non_participant.pv: calls v2 (participant media keys) against members who
+   are not, or are no longer, in the call.
+
+   The v2 schedule (calls.pvl): each participant device picks a random media
+   secret per call; its sender key is
+   call_sender_key_v2(call_root_v2(epoch, call id), media secret, leaf). A
+   joining participant makes a fresh HPKE key pair for the call and puts the
+   public key in its signed Joined. A participant hands its media secret, the
+   generation and its media session id to each bound participant in a MediaKey
+   grant: HPKE base mode sealed to that participant's call key, with info
+   (label, call id, sender leaf, recipient leaf), inside a signed MLS
+   application message. A receiver installs a key only for a leaf whose signed
+   Joined it has bound.
+
+   The attacker is the server, the media server and the network, colluding
+   with a group MEMBER M that never joins: it holds the epoch secret (so it
+   reads the whole MLS lane and derives call_root_v2), every call id, and M's
+   signature key. "Never joins" means no honest participant binds a Joined
+   from M. Three calls run in the same epoch, each with fresh secrets:
+
+   - Call 1 (cid1): A and B only. A grants B and sends media.
+   - Call 2 (cid2): A, B and L. L is the attacker's from the start (its
+     signature key, and a call key pair of the attacker's choosing), so it
+     keeps every grant it is given. L sends a signed Left; A rotates to a FRESH
+     secret and grants it to B alone; L stays a member of the same epoch.
+   - Call 3 (cid3): A and B, then newcomer N, also the attacker's. When N's
+     Joined binds, A advances its secret one step, announces the generation to
+     the call, grants the advanced secret to N alone, and B advances its copy.
+
+   B's own sending chain is the mirror image of A's and is left out; B only
+   receives.
+
+   Expected:
+   - (1) the never-joined member learns no media, sender key or session id of
+     call 1, although it does hold call 1's v2 call root (a check that the
+     attacker really is a member); and it forges no frame in call 1;
+   - (2) the leaver learns no media, or sender key, under the rotated secret;
+   - (3) the newcomer, holding the advanced secret, learns no media, or sender
+     key, under the secret before it;
+   - (4) every honest run completes: B decrypts A's frames in all three calls,
+     after the rotation and after the advance;
+   - (5) expected attacks: L reads call 2's media from before its departure,
+     and N reads call 3's media from after its arrival. Granted participants
+     read media, so the "true" verdicts above are not vacuous. *)
+
+const LEAF_L, LEAF_N, LEAF_M: bitstring.
+const G0, G1: bitstring.                 (* media secret generations *)
+const JOINED, LEFT, MK_GRANT, MK_GEN: bitstring.
+
+free es: key [private].                  (* the epoch secret; M hands it over below *)
+free cid1, cid2, cid3: bitstring.        (* call ids: M holds them *)
+free sigA, sigB, sigL, sigN, sigM: sskey [private].
+
+free s1A, s2A0, s2A1, s3A0: key [private].                    (* A's media secrets *)
+free m1A, m2A0, m2A1, m3A0, m3A1: bitstring [private].        (* A's media *)
+free sid1A, sid2A, sid3A: bitstring [private].                (* A's media session ids *)
+
+(* call id, sender leaf, generation, media *)
+event SentFrameV2(bitstring, bitstring, bitstring, bitstring).
+(* receiver, call id, claimed sender leaf, generation, media *)
+event AcceptFrameV2(bitstring, bitstring, bitstring, bitstring, bitstring).
+
+(* (1) The member that never joined. *)
+query attacker(m1A).
+query attacker(sid1A).
+query attacker(call_sender_key_v2(exporter(es, L_CALL_V2, cid1), s1A, LEAF_A)).
+query me: bitstring, l: bitstring, g: bitstring, m: bitstring;
+  event(AcceptFrameV2(me, cid1, l, g, m)) ==> event(SentFrameV2(cid1, l, g, m)).
+
+(* (2) The leaver, after the remaining participants rotate. *)
+query attacker(m2A1).
+query attacker(call_sender_key_v2(exporter(es, L_CALL_V2, cid2), s2A1, LEAF_A)).
+
+(* (3) The newcomer, holding only the advanced secret. *)
+query attacker(m3A0).
+query attacker(call_sender_key_v2(exporter(es, L_CALL_V2, cid3), s3A0, LEAF_A)).
+
+(* (4) Reachability: expected FALSE. *)
+query m: bitstring; event(AcceptFrameV2(LEAF_B, cid1, LEAF_A, G0, m)).
+query m: bitstring; event(AcceptFrameV2(LEAF_B, cid2, LEAF_A, G1, m)).
+query m: bitstring; event(AcceptFrameV2(LEAF_B, cid3, LEAF_A, G1, m)).
+
+(* (5) Expected attacks: expected FALSE. The member holds the v2 call root;
+   a granted participant reads media. *)
+query attacker(exporter(es, L_CALL_V2, cid1)).
+query attacker(m2A0).
+query attacker(m3A1).
+
+(* ---- The MLS lane and the media lane ------------------------------------- *)
+
+(* A signed call signal inside an MLS application message. *)
+let MlsSend(sk: sskey, p: bitstring) =
+  new iv: bitstring;
+  out(net, (iv, aead(mls_app_key(es), iv, MLS_AAD, sign(sk, p)))).
+
+(* One MediaKey grant from `from` to `to`, sealed to `to`'s call key. *)
+let Grant(sk: sskey, cid: bitstring, from: bitstring, to: bitstring, pk: hpkey,
+          g: bitstring, s: key, sid: bitstring) =
+  MlsSend(sk, (MK_GRANT, cid, from, to, g,
+               hpke_seal_info(pk, (L_MEDIA_KEY_V2, cid, from, to), (g, s, sid)))).
+
+let FrameSenderV2(cid: bitstring, leaf: bitstring, g: bitstring, s: key, m: bitstring) =
+  new iv: bitstring;
+  event SentFrameV2(cid, leaf, g, m);
+  out(net, (cid, leaf, g, iv, aead(frame_key_v2(es, cid, s, leaf), iv, HDR, m))).
+
+let FrameReceiverV2(me: bitstring, cid: bitstring, leaf: bitstring, g: bitstring, s: key) =
+  in(net, (=cid, =leaf, =g, iv: bitstring, c: bitstring));
+  let m = aead_open(frame_key_v2(es, cid, s, leaf), iv, HDR, c) in
+  event AcceptFrameV2(me, cid, leaf, g, m).
+
+(* ---- Call 1: A and B; M never joins --------------------------------------- *)
+
+let A1 =
+  new kA: hskey;
+  (   MlsSend(sigA, (JOINED, cid1, LEAF_A, hpk(kA)))
+    | (
+        in(net, (iv: bitstring, c: bitstring));
+        let (=JOINED, =cid1, =LEAF_B, pkB: hpkey) =
+          checksign(spk(sigB), aead_open(mls_app_key(es), iv, MLS_AAD, c)) in
+        (   Grant(sigA, cid1, LEAF_A, LEAF_B, pkB, G0, s1A, sid1A)
+          | FrameSenderV2(cid1, LEAF_A, G0, s1A, m1A) )
+      )
+  ).
+
+(* B, in any call: binds A's Joined, then installs A's generation-0 grant. *)
+let BJoin(cid: bitstring, kB: hskey) =
+  MlsSend(sigB, (JOINED, cid, LEAF_B, hpk(kB))).
+
+let B1 =
+  new kB: hskey;
+  (   BJoin(cid1, kB)
+    | (
+        in(net, (iv: bitstring, c: bitstring));
+        let (=JOINED, =cid1, =LEAF_A, pkA: hpkey) =
+          checksign(spk(sigA), aead_open(mls_app_key(es), iv, MLS_AAD, c)) in
+        in(net, (iv2: bitstring, c2: bitstring));
+        let (=MK_GRANT, =cid1, =LEAF_A, =LEAF_B, =G0, ct: bitstring) =
+          checksign(spk(sigA), aead_open(mls_app_key(es), iv2, MLS_AAD, c2)) in
+        let (=G0, s: key, sidA: bitstring) =
+          hpke_open_info(kB, (L_MEDIA_KEY_V2, cid1, LEAF_A, LEAF_B), ct) in
+        !FrameReceiverV2(LEAF_B, cid1, LEAF_A, G0, s)
+      )
+  ).
+
+(* ---- Call 2: A, B and L; L leaves, A rotates ------------------------------ *)
+
+let A2 =
+  new kA: hskey;
+  (   MlsSend(sigA, (JOINED, cid2, LEAF_A, hpk(kA)))
+    | (
+        in(net, (iv: bitstring, c: bitstring));
+        let (=JOINED, =cid2, =LEAF_B, pkB: hpkey) =
+          checksign(spk(sigB), aead_open(mls_app_key(es), iv, MLS_AAD, c)) in
+        in(net, (ivL: bitstring, cL: bitstring));
+        let (=JOINED, =cid2, =LEAF_L, pkL: hpkey) =
+          checksign(spk(sigL), aead_open(mls_app_key(es), ivL, MLS_AAD, cL)) in
+        (   Grant(sigA, cid2, LEAF_A, LEAF_B, pkB, G0, s2A0, sid2A)
+          | Grant(sigA, cid2, LEAF_A, LEAF_L, pkL, G0, s2A0, sid2A)
+          | FrameSenderV2(cid2, LEAF_A, G0, s2A0, m2A0)
+          | (
+              (* L's signed Left (a heartbeat timeout or a Remove acts the same) *)
+              in(net, (iv3: bitstring, c3: bitstring));
+              let (=LEFT, =cid2, =LEAF_L) =
+                checksign(spk(sigL), aead_open(mls_app_key(es), iv3, MLS_AAD, c3)) in
+              (* rotate: a fresh secret, granted to the remaining participants *)
+              (   Grant(sigA, cid2, LEAF_A, LEAF_B, pkB, G1, s2A1, sid2A)
+                | FrameSenderV2(cid2, LEAF_A, G1, s2A1, m2A1) )
+            )
+        )
+      )
+  ).
+
+let B2 =
+  new kB: hskey;
+  (   BJoin(cid2, kB)
+    | (
+        in(net, (iv: bitstring, c: bitstring));
+        let (=JOINED, =cid2, =LEAF_A, pkA: hpkey) =
+          checksign(spk(sigA), aead_open(mls_app_key(es), iv, MLS_AAD, c)) in
+        (
+            (
+              in(net, (iv2: bitstring, c2: bitstring));
+              let (=MK_GRANT, =cid2, =LEAF_A, =LEAF_B, =G0, ct: bitstring) =
+                checksign(spk(sigA), aead_open(mls_app_key(es), iv2, MLS_AAD, c2)) in
+              let (=G0, s: key, sidA0: bitstring) =
+                hpke_open_info(kB, (L_MEDIA_KEY_V2, cid2, LEAF_A, LEAF_B), ct) in
+              !FrameReceiverV2(LEAF_B, cid2, LEAF_A, G0, s)
+            )
+          | (
+              in(net, (iv2: bitstring, c2: bitstring));
+              let (=MK_GRANT, =cid2, =LEAF_A, =LEAF_B, =G1, ct: bitstring) =
+                checksign(spk(sigA), aead_open(mls_app_key(es), iv2, MLS_AAD, c2)) in
+              let (=G1, s: key, sidA1: bitstring) =
+                hpke_open_info(kB, (L_MEDIA_KEY_V2, cid2, LEAF_A, LEAF_B), ct) in
+              !FrameReceiverV2(LEAF_B, cid2, LEAF_A, G1, s)
+            )
+        )
+      )
+  ).
+
+(* ---- Call 3: A and B, then newcomer N; A advances -------------------------- *)
+
+let A3 =
+  new kA: hskey;
+  (   MlsSend(sigA, (JOINED, cid3, LEAF_A, hpk(kA)))
+    | (
+        in(net, (iv: bitstring, c: bitstring));
+        let (=JOINED, =cid3, =LEAF_B, pkB: hpkey) =
+          checksign(spk(sigB), aead_open(mls_app_key(es), iv, MLS_AAD, c)) in
+        (   Grant(sigA, cid3, LEAF_A, LEAF_B, pkB, G0, s3A0, sid3A)
+          | FrameSenderV2(cid3, LEAF_A, G0, s3A0, m3A0)
+          | (
+              (* N's signed Joined binds *)
+              in(net, (ivN: bitstring, cN: bitstring));
+              let (=JOINED, =cid3, =LEAF_N, pkN: hpkey) =
+                checksign(spk(sigN), aead_open(mls_app_key(es), ivN, MLS_AAD, cN)) in
+              let s1 = media_advance(s3A0) in
+              (   MlsSend(sigA, (MK_GEN, cid3, LEAF_A, G1))
+                | Grant(sigA, cid3, LEAF_A, LEAF_N, pkN, G1, s1, sid3A)
+                | FrameSenderV2(cid3, LEAF_A, G1, s1, m3A1) )
+            )
+        )
+      )
+  ).
+
+let B3 =
+  new kB: hskey;
+  (   BJoin(cid3, kB)
+    | (
+        in(net, (iv: bitstring, c: bitstring));
+        let (=JOINED, =cid3, =LEAF_A, pkA: hpkey) =
+          checksign(spk(sigA), aead_open(mls_app_key(es), iv, MLS_AAD, c)) in
+        in(net, (iv2: bitstring, c2: bitstring));
+        let (=MK_GRANT, =cid3, =LEAF_A, =LEAF_B, =G0, ct: bitstring) =
+          checksign(spk(sigA), aead_open(mls_app_key(es), iv2, MLS_AAD, c2)) in
+        let (=G0, s: key, sidA: bitstring) =
+          hpke_open_info(kB, (L_MEDIA_KEY_V2, cid3, LEAF_A, LEAF_B), ct) in
+        (   !FrameReceiverV2(LEAF_B, cid3, LEAF_A, G0, s)
+          | (
+              (* A's MediaKey announces generation 1: advance the copy, no grant *)
+              in(net, (iv3: bitstring, c3: bitstring));
+              let (=MK_GEN, =cid3, =LEAF_A, =G1) =
+                checksign(spk(sigA), aead_open(mls_app_key(es), iv3, MLS_AAD, c3)) in
+              !FrameReceiverV2(LEAF_B, cid3, LEAF_A, G1, media_advance(s))
+            )
+        )
+      )
+  ).
+
+process
+  out(net, (spk(sigA), spk(sigB), spk(sigL), spk(sigN), spk(sigM)));
+  (* M, a member that never joins: the epoch secret and its own signing key *)
+  out(net, (es, sigM));
+  (* L and N are the attacker's devices: their signing keys; each picks its
+     own call key pair, so it keeps every grant sealed to it *)
+  out(net, (sigL, sigN));
+  ( A1 | B1 | A2 | B2 | A3 | B3 )

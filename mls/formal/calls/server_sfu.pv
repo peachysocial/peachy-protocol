@@ -1,0 +1,92 @@
+(* SPDX-License-Identifier: MIT *)
+(* server_sfu.pv: the server, the SFU, TURN, the network and the push
+   providers, colluding, against a call among three honest members.
+
+   Scenario: A, B, C share epoch 1 of the chat's group. A call `cid` runs in
+   epoch 1. A self-updates (the 10-minute PCS commit), moving the group to
+   epoch 2, and the call continues there.
+
+   The attacker is handed, on top of every byte on the wire:
+   - the call id (it is sealed in the offer, but assume it leaks);
+   - the group id (the server only sees its handle, but assume it leaks);
+   - each epoch's sealed-sender send key, which the server really is handed
+     (SubmitCommit carries it: docs/sealed-messages.md §The anonymous door);
+   - every public key, and the SFU-visible track routing (leaf, tag).
+
+   Expected: every media frame, session id and epoch secret stays secret;
+   a receiver accepts only frames a member really sent (implicit key
+   confirmation: the sender and receiver derived the same key from the same
+   epoch secret); but NOT injectively: the SFU can replay a frame. *)
+
+free es1: key [private].          (* epoch 1, from the group's Welcome *)
+free gid: bitstring.              (* the MLS group id: public, conservatively *)
+free cid: bitstring.              (* the call id: public, conservatively *)
+free leafA1, leafB1, leafC1, leafA2: hskey [private].
+free sigA, sigB, sigC: sskey [private].
+free cs2: key [private].          (* A's self-update commit secret *)
+free mA1, mB1, mA2, mB2: bitstring [private].   (* media *)
+free sidA1, sidA2: bitstring [private].         (* SFU session ids, sealed in Joined *)
+
+query attacker(mA1).
+query attacker(mB1).
+query attacker(mA2).
+query attacker(mB2).
+query attacker(sidA1).
+query attacker(sidA2).
+query attacker(es1).
+query attacker(next_epoch(init_secret(es1), cs2)).
+query attacker(call_sender_key(exporter(es1, L_CALL, cid), LEAF_A)).
+
+(* Sanity: the protocol runs (each is expected to be FALSE, i.e. reachable). *)
+query es: key, cid: bitstring, m: bitstring; event(AcceptFrame(LEAF_B, E2, es, cid, LEAF_A, m)).
+query es: key, s: bitstring; event(AcceptLive(LEAF_B, E2, es, s)).
+
+(* Frame authenticity to the group, and implicit key confirmation. *)
+query me: bitstring, t: bitstring, es: key, cid: bitstring, l: bitstring, m: bitstring;
+  event(AcceptFrame(me, t, es, cid, l, m)) ==> event(SentFrame(t, es, cid, l, m)).
+query me: bitstring, t: bitstring, es: key, s: bitstring;
+  event(AcceptLive(me, t, es, s)) ==> event(SentLive(t, es, s)).
+
+(* Replay: expected FALSE. The SFU can deliver one frame twice. *)
+query me: bitstring, t: bitstring, es: key, cid: bitstring, l: bitstring, m: bitstring;
+  inj-event(AcceptFrame(me, t, es, cid, l, m)) ==> inj-event(SentFrame(t, es, cid, l, m)).
+
+process
+  out(net, (hpk(leafA1), hpk(leafB1), hpk(leafC1), spk(sigA), spk(sigB), spk(sigC)));
+  out(net, exporter(es1, L_SEALED_SENDER, gid));
+  (
+    (* ---- epoch 1 ---- *)
+      FrameSender(E1, es1, cid, LEAF_A, mA1)
+    | FrameSender(E1, es1, cid, LEAF_B, mB1)
+    | LiveSender(E1, es1, (cid, LEAF_A, sidA1))
+    | !FrameReceiver(LEAF_B, E1, es1, cid, LEAF_A)
+    | !FrameReceiver(LEAF_A, E1, es1, cid, LEAF_B)
+    | !LiveReceiver(LEAF_B, E1, es1)
+
+    (* ---- A commits a self-update and moves to epoch 2 ---- *)
+    | (
+        let es2 = next_epoch(init_secret(es1), cs2) in
+        let body = (E2, hpke_seal(hpk(leafB1), cs2), hpke_seal(hpk(leafC1), cs2), hpk(leafA2)) in
+        out(net, (body, sign(sigA, body)));
+        out(net, exporter(es2, L_SEALED_SENDER, gid));
+        (
+            FrameSender(E2, es2, cid, LEAF_A, mA2)
+          | LiveSender(E2, es2, (cid, LEAF_A, sidA2))
+          | !FrameReceiver(LEAF_A, E2, es2, cid, LEAF_B)
+        )
+      )
+
+    (* ---- B processes A's commit ---- *)
+    | (
+        in(net, (body: bitstring, s: bitstring));
+        let (=body) = checksign(spk(sigA), s) in
+        let (=E2, ctB: bitstring, ctC: bitstring, newA: hpkey) = body in
+        let cs = hpke_open(leafB1, ctB) in
+        let es2b = next_epoch(init_secret(es1), cs) in
+        (
+            FrameSender(E2, es2b, cid, LEAF_B, mB2)
+          | !FrameReceiver(LEAF_B, E2, es2b, cid, LEAF_A)
+          | !LiveReceiver(LEAF_B, E2, es2b)
+        )
+      )
+  )

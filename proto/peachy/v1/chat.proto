@@ -1,0 +1,1438 @@
+// SPDX-License-Identifier: MIT
+//
+// ChatService: the Peachy client protocol.
+//
+// Generated from Peachy's schema by the release exporter; edits here are
+// overwritten. Field numbers, names and types match the service exactly.
+// Fields and enum values that are not part of the public protocol are left
+// out and their numbers reserved: a reader built from this file skips them as
+// unknown fields.
+
+syntax = "proto3";
+
+package peachy.v1;
+
+import "google/protobuf/timestamp.proto";
+import "peachy/v1/state.proto";
+
+// An account's row. `id` is the account's permanent key and is never shown;
+// `phone` is private and set only on the caller's own row; `handle` is public.
+// `display_name` is the name the person set for themself, the same for every
+// viewer. What a viewer calls someone is the viewer's own business, kept in their
+// account store.
+message User {
+  reserved 7, 9 to 10;
+
+  // The account id.
+  string id = 1;
+
+  // E.164. Only on the caller's own row.
+  string phone = 2;
+  string display_name = 3;
+  google.protobuf.Timestamp created_at = 4;
+
+  // Profile photo path relative to the API host (e.g. "/avatars/<id>?v=<n>"),
+  // already cache-busted; served by plain HTTPS GET with no auth. Empty: no photo.
+  string avatar_url = 5;
+
+  // A version of this row that only grows. Keep the copy with the higher revision
+  // (replace when incoming >= stored).
+  int64 revision = 6;
+
+  // Public address: unique, lowercase [a-z0-9_]{3,30}, mentionable as @handle.
+  // Empty until the person chooses one.
+  string handle = 8;
+
+  // Profile cover photo path, served like avatar_url. Empty: none.
+  string cover_url = 11;
+
+  // The person's public profile id: 10 random lowercase base32 characters,
+  // fixed while the account exists, not the
+  // account id. Their profile link is pchy.app/<handle>, or
+  // pchy.app/u/<public_id> when they have no handle.
+  string public_id = 12;
+  string public_name = 13;
+}
+
+message StartPhoneVerificationRequest {
+  // E.164. A national trunk prefix after the country code is tolerated; the server
+  // canonicalizes the number and refuses one that cannot receive SMS.
+  string phone = 1;
+}
+
+message StartPhoneVerificationResponse {
+  // The canonical E.164 number the code went to. Send this to VerifyPhone.
+  string phone = 1;
+}
+
+message VerifyPhoneRequest {
+  reserved 4;
+  string phone = 1;
+  string code = 2;
+
+  // Required only when the phone has no account yet.
+  string display_name = 3;
+
+  // Set only by Peachy's web event sign-up, whose phone step carries a texting
+  // disclosure: a confirmed code then records consent to event text messages. A
+  // messaging client leaves it false.
+  bool event_rsvp = 5;
+}
+
+message VerifyPhoneResponse {
+  reserved 4;
+  string session_token = 1;
+  User user = 2;
+
+  // The code was valid but the phone has no account: call again with
+  // display_name set to create one. The code stays valid until it expires.
+  bool needs_display_name = 3;
+
+  // The code was valid, the account has the registration lock (a PIN) on, and no
+  // session was minted. Unlocking is not in the published proto; the person
+  // signs in on an official app, or waits for the lock to lapse.
+  RegistrationLockChallenge registration_lock = 5;
+}
+
+message SignOutRequest {}
+
+message SignOutResponse {}
+
+// A signed-in session. The bearer token itself never leaves the device that holds it.
+message Session {
+  reserved 7;
+  string id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp last_seen_at = 3;
+
+  // The client family only, e.g. "Peachy/1 (iOS)" or "Chrome/140 (macOS)".
+  string user_agent = 4;
+
+  // The session making this request.
+  bool current = 5;
+
+  // An open StreamEvents from this session right now.
+  bool streaming = 6;
+
+  // A push token is bound to this session.
+  bool push_registered = 8;
+}
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  // Current session first, then by last seen.
+  repeated Session sessions = 1;
+}
+
+message RevokeSessionRequest {
+  string session_id = 1;
+}
+
+message RevokeSessionResponse {}
+
+// An install's cryptographic identity: an Ed25519 key pair generated on the
+// device, whose private half never leaves it. Distinct from a Session (a login).
+// An install may register two rows: a plain one, and the MLS one that holds a
+// leaf in conversations (RegisterDeviceRequest.mls), linked by twin_of.
+message Device {
+  reserved 5;
+  string id = 1;
+
+  // Client-generated, stable for the life of one install. Empty on a row that did
+  // not register under the caller's own login.
+  string install_id = 2;
+
+  // "ios", "mac", "android" or "web"; RegisterDevice refuses anything else with
+  // invalid_argument. Which one a client that is not an official app sends is in
+  // docs/identity.md.
+  string platform = 3;
+
+  // The device's raw 32-byte Ed25519 public key.
+  bytes signing_key = 4;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp last_seen_at = 7;
+
+  // Set once the device is withdrawn. Revoked devices stay listed.
+  google.protobuf.Timestamp revoked_at = 8;
+
+  // The session that last registered this device, when still known. Empty on a row
+  // that did not register under the caller's own login.
+  string session_id = 9;
+
+  // Reserved for marking the device making the request; the server cannot tell
+  // which install a session is, so it is always false. Match your own row on
+  // install_id.
+  bool current = 10;
+
+  // "approved", "pending" (an MLS device registered without the account's
+  // signature, waiting to be let in), "expired" (pending and not seen for a week),
+  // or "denied".
+  string approval_state = 11;
+
+  // When a pending device first asked. Set only while pending or expired.
+  google.protobuf.Timestamp approval_requested_at = 12;
+
+  // The device registered with the account's signature under the account's
+  // current identity key: it holds the account key, can seal, and can approve
+  // other devices.
+  bool account_certified = 13;
+
+  // The client family of the session that registered the device, when known.
+  string signed_in_with = 14;
+
+  // For an MLS row, the plain row of the same install. Show the two as one device.
+  string twin_of = 15;
+
+  // Revoking this device also ends the session making the request: one of the
+  // install's sessions is the caller's own. Warn before revoking.
+  bool on_this_login = 16;
+
+  // The two-digit number's exchanges with this pending device, one per approver.
+  repeated DeviceLinkExchange link_exchanges = 17;
+
+  // The device that let this one in, when one did. Empty for a first device, a
+  // device let in by ClaimSoleDevice, or one that certified itself.
+  string approved_by_device_id = 18;
+
+  // The 64-byte Ed25519 signature approved_by_device_id made over this device's id
+  // and signing key when the person let it in ("peachy-device-approval-v1"), or
+  // empty when approved_by_device_id is. A device about to seat another device of
+  // its own account checks it against a key it already trusts, never against a key
+  // this list names. See docs/identity.md.
+  bytes approval_signature = 19;
+
+  // On a revoked device whose RevokeDevice carried one: the 64-byte Ed25519
+  // signature by the account identity key over "peachy-device-revocation-v1", a
+  // zero byte and this device's signing key. Empty otherwise. A member checks it
+  // against the leaf's own keys before removing a person's last leaf on it. See
+  // docs/identity.md.
+  bytes revocation = 20;
+
+  // On a live row of a linked install idle 24 days or more: when the server
+  // unlinks it unless it connects first. Unset otherwise. See docs/identity.md.
+  google.protobuf.Timestamp unlinks_at = 21;
+}
+
+// One revoked device and the account's signature revoking it (Device.revocation).
+message DeviceRevocation {
+  string device_id = 1;
+  bytes signature = 2;
+  google.protobuf.Timestamp revoked_at = 3;
+}
+
+// One approver's commit-then-reveal exchange with a pending device, filled in
+// order: the approver's commitment, the pending device's nonce, the approver's
+// nonce. Each field is 32 bytes or empty. The server relays these and decides
+// nothing with them. See docs/identity.md.
+message DeviceLinkExchange {
+  string approver_device_id = 1;
+  bytes approver_commitment = 2;
+  bytes device_nonce = 3;
+  bytes approver_nonce = 4;
+
+  // The approver's 64-byte Ed25519 signature over its commitment for this pending
+  // device ("peachy-device-link-commit-v2", over the pending device's id and key and
+  // the commitment). Stored and relayed, never checked by the server; a waiting
+  // device answers only an exchange whose signature verifies under the approver's
+  // key from its own device list. See docs/identity.md.
+  bytes approver_signature = 5;
+  bytes device_link_key = 6;
+  bytes device_link_key_signature = 7;
+}
+
+// One step of the two-digit number's exchange.
+message StepDeviceLinkRequest {
+  // The pending device.
+  string device_id = 1;
+
+  // The approving device this exchange is with.
+  string approver_device_id = 2;
+  oneof step {
+    // From the approver: starts (or restarts) the exchange and clears both nonces.
+    bytes approver_commitment = 3;
+
+    // From the pending device, once it has seen the commitment.
+    bytes device_nonce = 4;
+
+    // From the approver, once it has seen the device's nonce.
+    bytes approver_nonce = 5;
+  }
+
+  // With approver_commitment only: the approver's signature over it
+  // (DeviceLinkExchange.approver_signature). Stored and replaced with the
+  // commitment, and ignored with any other step.
+  bytes approver_commitment_signature = 6;
+  bytes device_link_key = 7;
+  bytes device_link_key_signature = 8;
+}
+
+message StepDeviceLinkResponse {}
+
+message RegisterDeviceRequest {
+  reserved 4;
+  string install_id = 1;
+  string platform = 2;
+
+  // Raw 32-byte Ed25519 public key.
+  bytes signing_key = 3;
+
+  // On an install's MLS row: the id of the same install's plain row, so revoking
+  // either reaches the other. Ignored unless it names a live plain row still
+  // linked to this login, on the same platform (docs/identity.md). Empty never
+  // erases an existing link.
+  string twin_of = 5;
+
+  // The account's 32-byte Ed25519 identity key, sent with account_signature by a
+  // device that holds the account key; both or neither. The server checks the
+  // signature, pins the identity key for the account on first sight and refuses a
+  // different one, and copies both into the credential. A device without them gets
+  // a credential no peer will seat and cannot publish KeyPackages.
+  // See docs/identity.md.
+  bytes account_identity_key = 6;
+
+  // 64-byte Ed25519 signature by the account identity key over
+  // "peachy-account-device-v1" 0x00 <signing_key, 32 bytes>.
+  bytes account_signature = 7;
+
+  // True for the row that will hold MLS leaves. On an account that already has an
+  // identity key, an MLS row registering without account_signature is a device
+  // asking to be let in: it becomes pending and the account's other devices are
+  // prompted.
+  bool mls = 8;
+
+  // True when this client wipes itself and returns to sign-in on already_exists.
+  // Only then does the server revoke the row of an install it judges a copy (see
+  // docs/identity.md, "A copied install"). A new client MUST implement starting
+  // over and send true.
+  bool starts_over_if_copied = 9;
+
+  // 64-byte Ed25519 signature by the private half of signing_key over
+  // "peachy-device-key-proof-v1" 0x00 <install_id> 0x00 <signing_key, 32 bytes>
+  // 0x00 <SHA-256 of this request's bearer token, 32 bytes>: this login holds the
+  // device key. A login new to the install's row is refused without a valid one.
+  // Send it on every registration. See docs/identity.md, "Taking over a row".
+  bytes key_proof = 10;
+}
+
+message RegisterDeviceResponse {
+  Device device = 1;
+
+  // The Peachy device credential binding this key to the account, a compact
+  // "pdc1.<payload>.<signature>" token. Verify it against the server's public keys
+  // at GET https://api.pchy.app/healthz/device-credential-keys. See docs/identity.md.
+  bytes credential = 2;
+
+  // The account identity key the server has pinned, or empty when none is. When it
+  // differs from the key this device derives, the device MUST NOT drop its account
+  // key or store on that answer; see docs/identity.md, RegisterDevice.
+  bytes account_identity_key = 3;
+
+  // This registration made the device the account's only one. A device that holds
+  // no account key mints one and certifies, instead of waiting for approval. A
+  // device that holds one MUST ignore it (see docs/account-store.md).
+  bool became_sole_device = 4;
+  bool pin_restored = 5;
+  repeated bytes pin_restore_signed_out_keys = 6;
+  repeated bytes pin_restore_signed_out_certificates = 7;
+}
+
+message ListDevicesRequest {}
+
+message ListDevicesResponse {
+  repeated Device devices = 1;
+}
+
+message RevokeDeviceRequest {
+  string device_id = 1;
+
+  // The account's revocation of each device of the install, from a caller holding
+  // the account key (Device.revocation). Optional. One that does not verify under
+  // the account's identity key, or names a device outside the install, is dropped;
+  // the revoke goes through either way.
+  repeated DeviceRevocation revocations = 2;
+}
+
+message RevokeDeviceResponse {
+  // The device had already been let in (approved, or certified with the account
+  // key) when the revoke landed.
+  bool was_let_in = 1;
+}
+
+// The approver signs, and seals the account key to, a key the server handed it,
+// so the new device's key must be confirmed through the person: a QR code with
+// the whole key, or the two-digit number. See docs/identity.md.
+message ApproveDeviceRequest {
+  // The pending device being let in.
+  string device_id = 1;
+
+  // Which of the caller's devices approves: the one that registered under the
+  // calling session. It must be unrevoked and hold the account key
+  // (Device.account_certified). The device being approved must still be pending.
+  string approver_device_id = 2;
+
+  // Ed25519 signature by the approver's signing key over
+  // "peachy-device-approval-v1" 0x00 <device_id, ASCII> 0x00 <signing_key, 32 bytes>.
+  bytes signature = 3;
+
+  // Required: the account key sealed to the device being let in. The box is the
+  // approval; without it nothing is let in. A client sends the version-3
+  // (post-quantum) box, 1213 bytes, sealed to the link key the device posted. The
+  // server checks only the size, and also takes the 93-byte version-1 box, which a
+  // device opens only under its switch (a test server, or the store-review login's
+  // 555-01xx sign-in). Handed only to the account's own devices, via
+  // FetchAccountKey. See docs/identity.md.
+  bytes account_key_box = 4;
+
+  // Optional: the approver's list of device keys the account signed out, sealed
+  // under the account key and bound to the device being let in; at most 8 KiB.
+  // Opaque to the server, which hands it back with the box via FetchAccountKey.
+  // See docs/identity.md.
+  bytes signed_out_box = 5;
+}
+
+message ApproveDeviceResponse {
+  Device device = 1;
+}
+
+// A device linked by a removed device stays signed in, but the account's other
+// devices stop trusting the removed device's approvals. A device the person still
+// trusts signs a fresh approval for it, which replaces the old one.
+message ReapproveDeviceRequest {
+  // The device to approve again.
+  string device_id = 1;
+
+  // Which of the caller's devices approves: the one that registered under the
+  // calling session. It must be unrevoked, hold the account key, and have an
+  // approval chain of live devices ending at one with no approval.
+  string approver_device_id = 2;
+
+  // Ed25519 signature by the approver's signing key over
+  // "peachy-device-approval-v1" 0x00 <device_id, ASCII> 0x00 <signing_key, 32 bytes>,
+  // over the device's current key.
+  bytes signature = 3;
+}
+
+message ReapproveDeviceResponse {
+  // The device as ListDevices now lists it, naming the new approver.
+  Device device = 1;
+}
+
+message ClaimSoleDeviceRequest {
+  // The caller's sealing device that becomes the only one.
+  string device_id = 1;
+
+  // Other rows of this same install (its plain row) that must survive.
+  repeated string keep_device_ids = 2;
+}
+
+message ClaimSoleDeviceResponse {
+  Device device = 1;
+
+  // The devices this revoked.
+  repeated string revoked_device_ids = 2;
+}
+
+// VerifyPhone's answer for an account with the registration lock on.
+message RegistrationLockChallenge {
+  reserved 3 to 5;
+  string ticket = 1;
+
+  // How long until the lock lapses on its own (seven days after the account was last active).
+  int64 time_remaining_ms = 2;
+}
+
+// One KeyPackage as its device publishes it: TLS-serialized bytes the server stores without reading.
+message MlsKeyPackage {
+  // The MLS ciphersuite id (0x004F). See docs/mls-core.md.
+  uint32 ciphersuite = 1;
+  bytes key_package = 2;
+
+  // The RFC 9420 KeyPackageRef, computed by the publisher. The idempotency key.
+  bytes key_package_ref = 3;
+
+  // Handed out when the ordinary pool is empty and never consumed. One per device
+  // is live; publishing a new one retires the old.
+  bool last_resort = 4;
+}
+
+message PublishKeyPackagesRequest {
+  // The caller's own unrevoked device, registered under the calling session and approved for the account.
+  string device_id = 1;
+  repeated MlsKeyPackage key_packages = 2;
+}
+
+message PublishKeyPackagesResponse {
+  // Packages newly written; a republished ref is not counted.
+  uint32 published = 1;
+
+  // The device's unconsumed ordinary pool after this call.
+  uint32 available = 2;
+  bool has_last_resort = 3;
+}
+
+message FetchKeyPackagesRequest {
+  reserved 2 to 3;
+
+  // The accounts whose devices you are about to add. One package is consumed per
+  // non-revoked device of each. Any signed-in caller may fetch for any existing
+  // account; the server meters per caller and per caller-target pair. Use
+  // FetchKeyPackagesAnonymous whenever you hold the target's access key.
+  repeated string user_ids = 1;
+
+  // Devices not to hand out (your own, when seating a sibling). At most 16.
+  repeated string skip_device_ids = 4;
+
+  // When set, only these devices are handed out and spent (seating one device).
+  // Ids belonging to none of user_ids are ignored. At most 16.
+  repeated string only_device_ids = 5;
+}
+
+message FetchedKeyPackage {
+  reserved 7;
+  string user_id = 1;
+  string device_id = 2;
+  uint32 ciphersuite = 3;
+  bytes key_package = 4;
+  bytes key_package_ref = 5;
+
+  // The device's pool was empty and this is its last-resort package. The add still
+  // works; the owner's devices should replenish.
+  bool used_last_resort = 6;
+}
+
+message FetchKeyPackagesResponse {
+  repeated FetchedKeyPackage key_packages = 1;
+
+  // Devices with no package at all; they cannot be added.
+  repeated string devices_without_packages = 2;
+}
+
+message SetAccessKeyRequest {
+  // Exactly 16 bytes. See docs/delivery.md for how it is chosen and shared.
+  bytes access_key = 1;
+}
+
+message SetAccessKeyResponse {}
+
+message FetchKeyPackagesAnonymousRequest {
+  string user_id = 1;
+  bytes access_key = 2;
+
+  // As FetchKeyPackagesRequest.only_device_ids. At most 16.
+  repeated string only_device_ids = 3;
+}
+
+message FetchKeyPackagesAnonymousResponse {
+  repeated FetchedKeyPackage key_packages = 1;
+  repeated string devices_without_packages = 2;
+}
+
+message KeyPackagePoolStatusRequest {}
+
+message DeviceKeyPackagePool {
+  string device_id = 1;
+  string platform = 2;
+  uint32 available = 3;
+  bool has_last_resort = 4;
+
+  // Below the server's low-water mark.
+  bool low = 5;
+}
+
+message KeyPackagePoolStatusResponse {
+  repeated DeviceKeyPackagePool devices = 1;
+
+  // The server's low-water mark.
+  uint32 low_water = 2;
+}
+
+// A Welcome, addressed by the sender to one device. It rides the commit that adds
+// or reseats that device, so the server learns the commit's handle and the device
+// it seats. It checks the KeyPackageRefs inside. See docs/delivery.md, The padded
+// Welcome frame.
+message MlsWelcome {
+  string recipient_device_id = 1;
+  bytes welcome = 2;
+
+  // The account that owns recipient_device_id.
+  string recipient_user_id = 3;
+}
+
+// See ChatService.SubmitCommit for the ordering rule.
+message SubmitCommitRequest {
+  reserved 1 to 2, 12 to 13;
+
+  // The epoch the commit was built in. Refused with failed_precondition unless it
+  // is the conversation's current epoch.
+  uint64 epoch = 3;
+
+  // The commit, wrapped in the conversation envelope. See docs/delivery.md.
+  bytes commit = 4;
+
+  // Welcomes, one per device: each device this commit adds, and for a founding in
+  // one commit the founder's own device too (docs/delivery.md, Founding a
+  // conversation), listed in device-id order. Delivered as MAILBOX_KIND_WELCOME. A
+  // Welcome naming a device that is not its owner's live device is refused with
+  // invalid_argument.
+  repeated MlsWelcome welcomes = 5;
+
+  // The current epoch's send key (32 bytes; see docs/delivery.md), checked against
+  // the verifier the server holds for the current epoch; for epoch 0, the one
+  // CreateHandle set. A wrong key is refused with permission_denied.
+  bytes send_key = 6;
+
+  // SHA-256 of the send key of the epoch this commit produces (32 bytes).
+  bytes next_verifier = 7;
+
+  // SEALED_CLASS_META objects (a new group photo) the commit's group state newly
+  // points at. The commit marks them taken, so they are not swept as abandoned.
+  // Only objects minted by CreateSealedMetaUpload are taken this way; one minted
+  // with a session belongs to that account's sealed profile.
+  repeated string meta_object_keys = 8;
+
+  // The conversation's handle (CreateHandle).
+  bytes handle = 9;
+
+  // Every device in the tree before this commit (the epoch it was built in), the sender's own included, and no others, listed by device id, never in leaf order (see docs/delivery.md, Sending). Empty for a founding's commits addressed to nobody (see docs/delivery.md, Founding a conversation).
+  repeated SealedRecipient recipients = 10;
+
+  // One per account among the recipients and the Welcomes' owners, in the order
+  // each account first appears in recipients, then in welcomes (see
+  // docs/delivery.md, Sending). Without a key for each, the call must carry a
+  // session.
+  repeated RecipientAccessKey access_keys = 11;
+}
+
+message SubmitCommitResponse {
+  // Equal to epoch.
+  uint64 seq = 1;
+
+  // The epoch after the commit: the request's epoch plus one.
+  uint64 epoch = 2;
+
+  // As SendSealedResponse.stale_device_ids.
+  repeated string stale_device_ids = 3;
+
+  // As SendSealedResponse.stale_revocations.
+  repeated DeviceRevocation stale_revocations = 4;
+
+  // As SendSealedResponse.retired_device_ids.
+  repeated string retired_device_ids = 5;
+}
+
+// Versions are dotted numbers compared component by component, a missing
+// component counting as 0. An empty answer means no minimum.
+message GetMinSupportedVersionRequest {
+  // "ios", "mac", "android", "web" or "protocol"; anything else is
+  // invalid_argument. For an app platform the answer is the official app's minimum,
+  // so a client that is not an official app should not act on it. A client of its
+  // own asks "protocol", which has no minimum and answers the protocol floor. See
+  // docs/delivery.md.
+  string platform = 1;
+}
+
+message GetMinSupportedVersionResponse {
+  string min_supported_version = 1;
+  string available_version = 2;
+  google.protobuf.Timestamp server_time = 3;
+
+  // The protocol floor, in every answer and the same for every caller. See
+  // docs/delivery.md.
+  ProtocolFloor protocol = 4;
+
+  // Checks switched on for the caller's account alone, while one is tried on a
+  // share of accounts. Empty without a session. Kept like ProtocolFloor.client_refusals.
+  repeated string account_client_refusals = 5;
+}
+
+// What the envelope doors take now, and the next refusal the server has
+// scheduled. Read it at start-up.
+message ProtocolFloor {
+  // The envelope versions SendSealed and SubmitCommit take now.
+  repeated uint32 envelope_versions = 1;
+
+  // The envelope version to be refused next; 0 when none is scheduled.
+  uint32 next_refused_envelope_version = 2;
+
+  // When that refusal starts; unset when none is scheduled.
+  google.protobuf.Timestamp next_refused_at = 3;
+
+  // Checks the server has switched on for every client, by name. A client keeps
+  // every name it knows for good, even once the server stops listing it, so a
+  // server can turn a check on and never off; a name it does not know it ignores.
+  // See docs/delivery.md.
+  repeated string client_refusals = 4;
+}
+
+message GetMeRequest {}
+
+message GetMeResponse {
+  reserved 2;
+  User user = 1;
+
+  // Where sealed objects are served from, with no trailing slash. A group photo is
+  // referenced from the group's own MLS state by object key; a member downloads it
+  // from <media_base_url>/<object_key>.
+  string media_base_url = 3;
+}
+
+message GetUsersRequest {
+  repeated string user_ids = 1;
+  repeated ProfileAsk profile_asks = 2;
+}
+
+message GetUsersResponse {
+  repeated User users = 1;
+  repeated SealedProfile sealed_profiles = 2;
+}
+
+message ProfileAsk {
+  string user_id = 1;
+  bytes access_key = 2;
+}
+
+message SealedProfile {
+  string user_id = 1;
+  bytes sealed = 2;
+}
+
+// What an upload is. Sealed attachments are UPLOAD_KIND_FILE.
+enum UploadKind {
+  reserved 1 to 4, 6 to 16;
+  UPLOAD_KIND_UNSPECIFIED = 0;
+  UPLOAD_KIND_FILE = 5;
+}
+
+message CreateUploadRequest {
+  reserved 4 to 5;
+  UploadKind kind = 1;
+
+  // Must match the Content-Type of the PUT. For a sealed object, application/octet-stream.
+  string content_type = 2;
+
+  // The exact byte count of the PUT.
+  int64 content_length = 3;
+
+  // Required for a sealed object; picks its lifetime.
+  SealedClass sealed_class = 6;
+  bool resumable = 7;
+}
+
+message ResumableUpload {
+  string upload_id = 1;
+  int64 part_bytes = 2;
+  repeated string part_urls = 3;
+  string list_parts_url = 4;
+  string complete_url = 5;
+  string abort_url = 6;
+  int64 expires_at = 7;
+}
+
+// Where a sealed object lives, and for how long.
+enum SealedClass {
+  SEALED_CLASS_UNSPECIFIED = 0;
+
+  // A message attachment or a history hand-off. Deleted 30 days after upload;
+  // recipients download it when the envelope arrives.
+  SEALED_CLASS_ATTACHMENT = 1;
+
+  // A group photo, which goes up only on CreateSealedMetaUpload, or, on
+  // CreateUpload with a session, the caller's own profile photo, recorded against
+  // the account. Deleted 7 days after upload unless a commit or profile keeps it,
+  // then kept until deleted with the delete token (DeleteSealedObject); an account
+  // keeps at most four for its profile, and the oldest past that are deleted.
+  SEALED_CLASS_META = 2;
+}
+
+message CreateUploadResponse {
+  reserved 4 to 5;
+
+  // A presigned PUT URL. Expires in minutes: use it immediately.
+  string upload_url = 1;
+
+  // Name this inside the encrypted pointer, or in SubmitCommitRequest.meta_object_keys, once the PUT succeeds. The server records no account against a sealed attachment or a group photo; a SEALED_CLASS_META object minted with a session is recorded against that account (its own sealed profile photo).
+  string object_key = 2;
+
+  // Where recipients GET the object.
+  string public_url = 3;
+
+  // SEALED_CLASS_META only: the capability that deletes the object. Carry it in the
+  // group's state beside the pointer, so whichever member replaces the photo can
+  // delete the old one.
+  string delete_token = 6;
+  ResumableUpload resumable = 7;
+}
+
+message AbandonUploadRequest {
+  string object_key = 1;
+}
+
+message AbandonUploadResponse {
+  // False is not an error: the call is idempotent. Always false for a sealed object, whose uploader nothing records.
+  bool abandoned = 1;
+}
+
+message DeleteSealedObjectRequest {
+  string object_key = 1;
+  string delete_token = 2;
+}
+
+message DeleteSealedObjectResponse {}
+
+message CreateSealedMetaUploadRequest {
+  // The exact byte count of the sealed bytes, 1 to 8,000,000; otherwise invalid_argument, and the token is not spent.
+  int64 content_length = 1;
+
+  // One group-photo token, spent once content_length passes, whatever the answer.
+  // Not a token (wrong length or type): invalid_argument, not spent. Spent:
+  // permission_denied. Another purpose, a lapsed key or a bad signature:
+  // unauthenticated.
+  bytes token = 2;
+}
+
+message GetUserByHandleRequest {
+  reserved 1;
+  bytes handle_hash = 2;
+}
+
+message GetUserByHandleResponse {
+  reserved 2 to 3;
+  User user = 1;
+}
+
+// What an envelope is, as the server knows it from the call that delivered it.
+enum MailboxKind {
+  reserved 3;
+  MAILBOX_KIND_UNSPECIFIED = 0;
+
+  // A wrapped conversation envelope from SendSealed: an MLS application message, a
+  // seat ask or a call signal. Your own sends come back too.
+  MAILBOX_KIND_MLS = 1;
+
+  // A Welcome sealed to this device. Everything after it in the mailbox for its
+  // conversation is at or after the epoch it joins.
+  MAILBOX_KIND_WELCOME = 2;
+
+  // A note from one of this account's own devices, sealed under the account key.
+  MAILBOX_KIND_SELF_NOTE = 4;
+
+  // A wrapped commit the server accepted (SubmitCommit).
+  MAILBOX_KIND_COMMIT = 5;
+}
+
+// One envelope in a device's mailbox. It names no conversation: the device finds out by opening it.
+message MailboxEnvelope {
+  reserved 3, 6 to 8, 10;
+  string id = 1;
+  MailboxKind kind = 2;
+  bytes payload = 4;
+
+  // When the server received the send. Orders messages across senders; the
+  // sender's own clock travels inside the ciphertext.
+  google.protobuf.Timestamp received_at = 5;
+  bytes commit_stamp = 9;
+}
+
+// One device a sender addresses. The MLS tree names every member's devices, so
+// the sender lists them and the server needs no roster. A device id that does
+// not exist or is revoked is skipped and listed in stale_device_ids; any other
+// device that is not that account's live device is skipped silently.
+message SealedRecipient {
+  reserved 3;
+  string user_id = 1;
+  string device_id = 2;
+}
+
+// An account's 16-byte access key, which its owner shares with the people it
+// talks to inside sealed messages. The server compares SHA-256 in constant time.
+message RecipientAccessKey {
+  string user_id = 1;
+  bytes access_key = 2;
+}
+
+message SendSealedRequest {
+  reserved 1 to 3, 7, 11;
+
+  // The conversation envelope (see docs/delivery.md), 1 byte to 1 MiB.
+  bytes payload = 4;
+
+  // Something a person did, which may cause a push: set exactly when the content
+  // hint is 1 (a message) or 3 (a reaction, edit or delete), and for a call's ring,
+  // answer and hang-up. Clear for everything else. See docs/delivery.md.
+  bool urgent = 5;
+
+  // The retry key, a v4 UUID, required on every stored send and honored while the
+  // envelope is undelivered. Only the sender can make it: a message's key is an
+  // HMAC of its id under a secret the install keeps, anything else's a random UUID
+  // kept with the pending send. One key per send, the same on every retry. Never a
+  // message id. See docs/delivery.md.
+  string client_message_id = 6;
+
+  // Exactly the devices of the leaves in the sender's current tree, its own device and its own other seated devices included, and no other device, listed by device id, never in leaf order (see docs/delivery.md, Sending).
+  repeated SealedRecipient recipients = 8;
+
+  // One per recipient account, in the order each first appears in recipients (see
+  // docs/delivery.md, Sending). Without a key for each, the call must carry a
+  // session and is metered per caller.
+  repeated RecipientAccessKey access_keys = 9;
+
+  // A typing frame or a live-lane call frame (see docs/calls.md, Signaling):
+  // relayed as an EphemeralEvent to the streams open at that moment for each
+  // recipient account, and stored nowhere. At most 4 KiB.
+  bool ephemeral = 10;
+}
+
+message SendSealedResponse {
+  // The envelope id every recipient sees.
+  string id = 1;
+  google.protobuf.Timestamp received_at = 2;
+
+  // Recipient device ids that do not exist or are revoked; nothing was delivered
+  // to them. Remove their leaves from the group where the rules of docs/identity.md
+  // allow it. Never a reason to seat one.
+  repeated string stale_device_ids = 3;
+
+  // The account's revocation (Device.revocation) of each stale device that has one.
+  // Without it, a member removes a person's last leaf only once its credential is
+  // 56 days past expiry; the stale list alone is never enough.
+  repeated DeviceRevocation stale_revocations = 4;
+
+  // Devices marked retired: nothing was placed for them. Act on them only through
+  // the core's remove_stale_leaf, and forget each ten minutes after it was last
+  // listed. See docs/delivery.md.
+  repeated string retired_device_ids = 5;
+}
+
+message FetchMailboxRequest {
+  // The caller's own unrevoked device, registered under the calling session. Another device of the same account is permission_denied.
+  string device_id = 1;
+
+  // Clamped by the server; 0 means the default page (200).
+  uint32 limit = 2;
+}
+
+message FetchMailboxResponse {
+  // Oldest first. Reading removes nothing: acknowledge what you have durably
+  // processed with AckMailbox, and anything unacknowledged comes back.
+  repeated MailboxEnvelope envelopes = 1;
+
+  // More are waiting beyond this page.
+  bool more = 2;
+
+  // Something addressed to this device expired uncollected since it last asked.
+  // Sweep every head with FetchConversationHead, compare each conversation's epoch
+  // with your own, and ask back in where you are behind. See docs/delivery.md.
+  bool lost = 3;
+
+  // The server's clock when it answered.
+  google.protobuf.Timestamp server_time = 4;
+
+  // The server holds notifications for this session that are not in the mailbox.
+  // A client of this protocol alone may ignore it.
+  bool notices_waiting = 5;
+}
+
+message AckMailboxRequest {
+  // As FetchMailboxRequest.device_id: the device the calling session registered, and no other.
+  string device_id = 1;
+
+  // Envelope ids. Unknown ids are ignored.
+  repeated string ids = 2;
+}
+
+message AckMailboxResponse {}
+
+message SendSelfNoteRequest {
+  // Sealed under the account key. At most 1 MiB.
+  bytes payload = 1;
+
+  // Empty: every one of the caller's MLS devices. Otherwise one of them (a history hand-off).
+  string device_id = 2;
+}
+
+message SendSelfNoteResponse {
+  string id = 1;
+}
+
+// One sealed record of the account store. See docs/account-store.md.
+message StoreRecord {
+  // 16 random bytes chosen by a client.
+  bytes id = 1;
+
+  // The sealed record: 0x01 || nonce || AES-256-GCM ciphertext.
+  bytes value = 2;
+}
+
+message ReadStoreRequest {
+  // The version the caller holds; 0 when none.
+  int64 since_version = 1;
+
+  // Only these records; empty means every record.
+  repeated bytes ids = 2;
+}
+
+message ReadStoreResponse {
+  // 0 with an empty manifest: no store has ever been written.
+  int64 version = 1;
+
+  // Empty when version equals since_version.
+  bytes manifest = 2;
+  repeated StoreRecord records = 3;
+}
+
+message WriteStoreRequest {
+  // Compare-and-swap: the write lands only if the stored version is this.
+  int64 expected_version = 1;
+  bytes manifest = 2;
+  repeated StoreRecord upserts = 3;
+  repeated bytes deletes = 4;
+
+  // Delete every record before applying the write.
+  bool reset = 5;
+}
+
+message WriteStoreResponse {
+  // Another device wrote first and nothing was written. Re-read, merge, retry.
+  bool conflict = 1;
+
+  // The stored version after the call.
+  int64 version = 2;
+}
+
+message FetchAccountKeyRequest {
+  // One of the caller's own devices.
+  string device_id = 1;
+}
+
+message FetchAccountKeyResponse {
+  // Empty when no approver has sealed the key to this device.
+  bytes box = 1;
+  string approver_device_id = 2;
+
+  // The approver's ApproveDeviceRequest.signed_out_box, as sent; empty when it sent none, and whenever box is.
+  bytes signed_out_box = 3;
+}
+
+// An ephemeral payload someone addressed to this account (SendSealedRequest with
+// ephemeral set). It names no sender and no conversation; the bytes are a sealed
+// envelope. Delivered only to streams open at that moment. Your own frames come
+// back too; drop them.
+message EphemeralEvent {
+  reserved 1;
+  bytes payload = 2;
+}
+
+message StreamEventsRequest {
+  reserved 1;
+
+  // This session's own device, to be handed its mailbox on the stream (see
+  // StreamEventsResponse.mailbox). Held to FetchMailboxRequest.device_id's rule;
+  // a device that does not pass it, or empty, gets pokes instead.
+  string mailbox_device_id = 2;
+}
+
+// Ask for a beat on this session's own streams, now: after a network change, a
+// beat that arrives within a few seconds shows the stream still reaches you.
+// Rate-limited per session (resource_exhausted).
+message BeatStreamRequest {
+  // Yours to choose, at most 64 bytes; the beat carries it back.
+  string nonce = 1;
+}
+
+message BeatStreamResponse {
+  // False: this session holds no stream here. Open the next one now.
+  bool streaming = 1;
+}
+
+// A beat asked for with BeatStream.
+message StreamBeat {
+  string nonce = 1;
+}
+
+// One event. Exactly one field is set, except that the opening event may carry
+// mailbox beside state_versions; a client ignores fields it does not know.
+message StreamEventsResponse {
+  reserved 1 to 13, 15;
+
+  // Something this account holds changed; refetch what you hold for each named
+  // domain. Never carries data.
+  StateChangedEvent state_changed = 14;
+
+  // A typing frame or a live-lane call frame (see SendSealedRequest.ephemeral).
+  EphemeralEvent ephemeral = 16;
+
+  // The server is closing this stream on purpose. Always the last event; wait the
+  // delay it names before reconnecting.
+  ReconnectHint reconnect = 17;
+
+  // The stream's first event: the current version of every domain the server
+  // versions. Refetch only the domains whose version moved since your last
+  // stream; absent means refetch everything.
+  StateVersions state_versions = 18;
+
+  // Only for a stream that named its device: a mailbox page, sent on the opening
+  // event and in place of each STATE_DOMAIN_MAILBOX poke. It is what FetchMailbox
+  // would answer, except that an envelope this stream already carried comes back
+  // with an empty payload, and lost and notices_waiting are never set. Drain it as
+  // a fetched page; fetch instead when an empty-payload envelope on it is one you
+  // neither hold nor have processed, and fetch the rest when more is set.
+  FetchMailboxResponse mailbox = 19;
+
+  // The beat this session asked for with BeatStream. Never sent otherwise.
+  StreamBeat beat = 20;
+}
+
+// Every versioned domain's current version. A domain with no entry reads as version 0.
+message StateVersions {
+  repeated StateDomainVersion domains = 1;
+}
+
+// A domain's version for one account. It changes on every poke for that domain
+// and never repeats; compare for equality only.
+message StateDomainVersion {
+  StateDomain domain = 1;
+  int64 version = 2;
+}
+
+// How long to wait before opening the next stream.
+message ReconnectHint {
+  uint32 after_ms = 1;
+}
+
+// The domains a call just dirtied for this account.
+message StateChangedEvent {
+  repeated StateDomain domains = 1;
+
+  // The domains' new versions. Empty: treat these domains as moved on the next connect.
+  repeated StateDomainVersion versions = 2;
+}
+
+message CreateHandleRequest {
+  reserved 3 to 4;
+
+  // SHA-256("peachy handle v1" || group id), 32 bytes. See docs/delivery.md.
+  bytes handle = 1;
+
+  // SHA-256 of epoch 0's send key: what the first commit must present.
+  bytes verifier = 2;
+}
+
+message CreateHandleResponse {}
+
+message FetchVerifierAtRequest {
+  // The conversation's handle (CreateHandle).
+  bytes handle = 1;
+
+  // The epoch the Welcome seats the device at.
+  uint64 epoch = 2;
+}
+
+message FetchVerifierAtResponse {
+  // SHA-256 of that epoch's send key, 32 bytes; empty when the log holds no row
+  // for the epoch (below what it keeps, never reached, or no such handle).
+  bytes verifier = 1;
+
+  // The lowest epoch from which the log holds every epoch up to the head: an empty
+  // verifier at an epoch at or above it, below the head, names an epoch the group
+  // never passed through. Absent when the log does not reach the head.
+  optional uint64 kept_from = 2;
+}
+
+message FetchConversationHeadRequest {
+  // These heads, at most 500. Only the handle of a commit the caller just
+  // submitted, so the read names nothing that commit did not.
+  repeated bytes handles = 1;
+
+  // Every head on the server instead, in ascending handle order, at most 5000 a
+  // page. Needs a session; handles must be empty.
+  bool every = 2;
+
+  // With every: empty for the first page, else the last handle of the page before.
+  bytes after = 3;
+}
+
+// A conversation's current epoch, by handle.
+message ConversationHead {
+  bytes handle = 1;
+  uint64 epoch = 2;
+
+  // SHA-256 of this epoch's send key. A member compares it with its own send key's
+  // hash to tell whether its tree is the one the server accepted.
+  bytes verifier = 3;
+}
+
+message FetchConversationHeadResponse {
+  // One per known handle; an unknown handle is absent.
+  repeated ConversationHead heads = 1;
+
+  // With every: another page follows.
+  bool more = 2;
+}
+
+// Which door a token opens. Each purpose has its own key and its own origin_info
+// in the TokenChallenge, so a token of one purpose fails at another's door.
+enum CallTokenPurpose {
+  CALL_TOKEN_PURPOSE_UNSPECIFIED = 0;
+
+  // Starting or joining a call, its relays, and reading or joining a call link (the call signaling rpcs, outside this specification).
+  CALL_TOKEN_PURPOSE_JOIN = 1;
+
+  // Making a call link (outside this specification).
+  CALL_TOKEN_PURPOSE_LINK_CREATE = 2;
+
+  // CreateSealedMetaUpload; origin_info "group-photo".
+  CALL_TOKEN_PURPOSE_GROUP_PHOTO = 3;
+}
+
+message CallTokenKey {
+  CallTokenPurpose purpose = 1;
+
+  // SHA-256 of public_key (RFC 9578's token_key_id). A client computes it and refuses a key whose id differs.
+  bytes key_id = 2;
+
+  // SubjectPublicKeyInfo, id-RSASSA-PSS with SHA-384 (RFC 9578 section 6.5), DER.
+  bytes public_key = 3;
+
+  // IssueCallTokens signs under this key from issue_from until issue_until.
+  google.protobuf.Timestamp issue_from = 4;
+  google.protobuf.Timestamp issue_until = 5;
+
+  // Its tokens redeem until then; a client drops them after.
+  google.protobuf.Timestamp redeem_until = 6;
+}
+
+message GetCallTokenKeysRequest {}
+
+message GetCallTokenKeysResponse {
+  repeated CallTokenKey keys = 1;
+}
+
+message IssueCallTokensRequest {
+  CallTokenPurpose purpose = 1;
+
+  // The issuing key the messages were blinded under, from GetCallTokenKeys.
+  bytes key_id = 2;
+
+  // RFC 9474 blinded messages, 256 bytes each, 1 to 20.
+  repeated bytes blinded_messages = 3;
+}
+
+message IssueCallTokensResponse {
+  // Each blinded message's blind signature (256 bytes), in request order.
+  repeated bytes blind_signatures = 1;
+}
+
+// The Peachy client protocol, served over Connect (HTTP POST, binary protobuf or
+// JSON) at https://api.pchy.app under /peachy.v1.ChatService/<Method>.
+//
+// Authenticated calls carry "Authorization: Bearer <session_token>" from
+// VerifyPhone. Calls marked SESSIONLESS need no Authorization header.
+//
+// Every private conversation is end-to-end encrypted with MLS (RFC 9420). The
+// server holds a handle per conversation and a mailbox per device, and never
+// plaintext, except a reported message's words when the reporter chooses to
+// include them. While a commit or Welcome waits to be collected (at most 30
+// days), the rows it stored tie the handle to the devices still owed it and to
+// their accounts; docs/metadata.md says so, and names the store-review
+// exception. See docs/delivery.md and docs/sealed-messages.md.
+service ChatService {
+  // Send a one-time sign-in code by SMS to a phone number.
+  rpc StartPhoneVerification(StartPhoneVerificationRequest) returns (StartPhoneVerificationResponse);
+
+  // Exchange the code for a session. A phone with no account needs display_name
+  // set to create one; an account with the registration lock on answers with
+  // registration_lock and no session.
+  rpc VerifyPhone(VerifyPhoneRequest) returns (VerifyPhoneResponse);
+
+  // End the calling session.
+  rpc SignOut(SignOutRequest) returns (SignOutResponse);
+
+  // The caller's signed-in sessions, current one first.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // Sign one of the caller's sessions out, by Session.id.
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+
+  // Register this install's Ed25519 signing key and get back a Peachy device
+  // credential. Idempotent on (account, install_id). See docs/identity.md.
+  rpc RegisterDevice(RegisterDeviceRequest) returns (RegisterDeviceResponse);
+
+  // The caller's devices and their public keys, newest first, revoked ones included.
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+
+  // Withdraw one of the caller's devices: its key stops being the account's, its
+  // credentials are revoked, and its sessions end. Only from a session whose own
+  // device is approved (holds an account signature); otherwise permission_denied.
+  rpc RevokeDevice(RevokeDeviceRequest) returns (RevokeDeviceResponse);
+
+  // Let a pending device in, with a signature from one of the caller's approved
+  // devices, and seal the account key to it. Only from a session the approver
+  // registered under; otherwise permission_denied. See docs/identity.md.
+  rpc ApproveDevice(ApproveDeviceRequest) returns (ApproveDeviceResponse);
+
+  // Approve again a device whose approval chain runs through a removed device:
+  // a live device of the account that holds the account key and is approved.
+  // Only from a session the approver registered under, whose own approval chain
+  // ends at a live device with no approval; otherwise permission_denied or
+  // failed_precondition. No account key travels. See docs/identity.md.
+  rpc ReapproveDevice(ReapproveDeviceRequest) returns (ReapproveDeviceResponse);
+
+  // Relay one step of the two-digit number's commit-then-reveal exchange between a
+  // pending device and an approver of the same account. Each side steps only from
+  // a session it registered under: the approver's steps from the approver's, the
+  // nonce from the pending device's. The other side reads the step from
+  // ListDevices (Device.link_exchanges).
+  rpc StepDeviceLink(StepDeviceLinkRequest) returns (StepDeviceLinkResponse);
+
+  // Become the account's only device, revoking every other one: the recovery path
+  // for a person who can reach none of their other devices. The kept device must
+  // have registered under the calling login, and keep_device_ids may name only its
+  // twins or rows that same login registered; otherwise permission_denied.
+  // Refused while the account's registration lock is on. See docs/identity.md.
+  rpc ClaimSoleDevice(ClaimSoleDeviceRequest) returns (ClaimSoleDeviceResponse);
+
+  // Publish this device's single-use MLS KeyPackages, plus at most one last-resort
+  // package. Idempotent on key_package_ref.
+  rpc PublishKeyPackages(PublishKeyPackagesRequest) returns (PublishKeyPackagesResponse);
+
+  // Take one KeyPackage per non-revoked device of each named account, consuming
+  // it; falls back to a device's last-resort package when its pool is empty. The
+  // identified path: use it only without the target's access key, otherwise
+  // FetchKeyPackagesAnonymous.
+  rpc FetchKeyPackages(FetchKeyPackagesRequest) returns (FetchKeyPackagesResponse);
+
+  // SESSIONLESS. The same handout for one account, authorized by that account's
+  // access key. A wrong key, an account that never set a key and an unknown
+  // account all answer permission_denied. A deleted account passes with any key
+  // and gets an empty handout.
+  rpc FetchKeyPackagesAnonymous(FetchKeyPackagesAnonymousRequest) returns (FetchKeyPackagesAnonymousResponse);
+
+  // Set or rotate the caller's 16-byte access key. The server keeps only its SHA-256.
+  rpc SetAccessKey(SetAccessKeyRequest) returns (SetAccessKeyResponse);
+
+  // How many KeyPackages each of the caller's devices has left, and which are
+  // below the server's low-water mark: the replenishment signal.
+  rpc KeyPackagePoolStatus(KeyPackagePoolStatusRequest) returns (KeyPackagePoolStatusResponse);
+
+  // SESSIONLESS when every recipient account's access key is supplied; otherwise
+  // authenticated. Either way the epoch's send key is what authorizes the commit
+  // itself. Extends a conversation's history by one commit
+  // and routes the Welcomes that go with it.
+  //
+  // The total-order rule: the request names the epoch the commit was built in, and
+  // the server accepts it only if that is still the conversation's current epoch.
+  // Of two devices committing from the same epoch exactly one wins; the other gets
+  // failed_precondition and must fetch its mailbox, apply what it missed, rebuild
+  // its commit on the new epoch and submit again. It must never resend the same
+  // bytes. See docs/delivery.md.
+  rpc SubmitCommit(SubmitCommitRequest) returns (SubmitCommitResponse);
+
+  // SESSIONLESS. Each platform's minimum supported client version, and the protocol floor.
+  rpc GetMinSupportedVersion(GetMinSupportedVersionRequest) returns (GetMinSupportedVersionResponse);
+
+  // The caller's own account.
+  rpc GetMe(GetMeRequest) returns (GetMeResponse);
+
+  // Reserve an object for a sealed attachment, or the caller's own sealed profile
+  // photo, and get a presigned URL to PUT its ciphertext to. Never a group photo
+  // (CreateSealedMetaUpload). See docs/sealed-messages.md for the blob format.
+  rpc CreateUpload(CreateUploadRequest) returns (CreateUploadResponse);
+
+  // Delete an upload the caller made that no send has committed. Not for sealed
+  // objects, whose uploader nothing records: it answers abandoned: false.
+  rpc AbandonUpload(AbandonUploadRequest) returns (AbandonUploadResponse);
+
+  // SESSIONLESS. Delete a SEALED_CLASS_META object (a replaced group photo) with the
+  // delete token minted beside it.
+  rpc DeleteSealedObject(DeleteSealedObjectRequest) returns (DeleteSealedObjectResponse);
+
+  // SESSIONLESS, metered per IP. Reserve a group photo's object (SEALED_CLASS_META),
+  // authorized by one anonymous group-photo token (IssueCallTokens) in place of a
+  // session. The server records the object's key, the hash of its delete token and
+  // when it was minted, and a hash of the spent token kept until its key expires;
+  // no account. The request's IP address and timing remain. Answers as
+  // CreateUpload does. See docs/delivery.md, Upload.
+  rpc CreateSealedMetaUpload(CreateSealedMetaUploadRequest) returns (CreateUploadResponse);
+
+  // SESSIONLESS, metered per IP. An account's public row by the hash of its
+  // @handle, without its actor id. With a session it is identified (metered per caller) and is the
+  // only form that answers with an actor id.
+  rpc GetUserByHandle(GetUserByHandleRequest) returns (GetUserByHandleResponse);
+
+  // SESSIONLESS, metered per IP. Several accounts' public rows at once (no phone),
+  // for keeping the people a device holds current. The rows are the same for every
+  // caller, so a client asks without a session and the server does not learn from
+  // the call whose profiles an account reads; the connecting IP can still link it
+  // to the device's other calls. Unknown ids are left out. At most 500 ids per
+  // call.
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+
+  // SESSIONLESS when every recipient account's access key is supplied; otherwise
+  // authenticated and metered per caller. Delivers one sender-addressed envelope to
+  // exactly the devices named. The one path for every sealed message, reaction,
+  // receipt, edit, delete marker, typing frame, seat ask and call signal. Commits
+  // use SubmitCommit; a standalone proposal is never sent. See docs/delivery.md.
+  rpc SendSealed(SendSealedRequest) returns (SendSealedResponse);
+
+  // SESSIONLESS. Open a conversation's head: its handle and epoch 0's send-key
+  // verifier. The server learns that a handle exists, not whose it is.
+  rpc CreateHandle(CreateHandleRequest) returns (CreateHandleResponse);
+
+  // Conversations' current epochs and verifiers. By handle it is SESSIONLESS, and
+  // only for a handle the caller just committed to. Otherwise a signed-in device
+  // sweeps every head, a page at a time, naming none: how a device that lost
+  // mailbox envelopes finds the conversations it is behind in. See docs/delivery.md.
+  rpc FetchConversationHead(FetchConversationHeadRequest) returns (FetchConversationHeadResponse);
+
+  // SESSIONLESS. The verifier a conversation's head held at one epoch, from the
+  // log the server keeps of its last 4096 epochs. Read only for the group of a
+  // Welcome below its head. See docs/delivery.md.
+  rpc FetchVerifierAt(FetchVerifierAtRequest) returns (FetchVerifierAtResponse);
+
+  // What this device's mailbox holds, oldest first. Reading removes nothing.
+  rpc FetchMailbox(FetchMailboxRequest) returns (FetchMailboxResponse);
+
+  // Drop envelopes this device has durably processed, no sooner than 1 to 3 seconds
+  // (drawn per page) after the FetchMailbox answer that returned them, so the
+  // timing does not tell the server whose own copies they were (docs/delivery.md,
+  // "The ack's floor"). Idempotent.
+  rpc AckMailbox(AckMailboxRequest) returns (AckMailboxResponse);
+
+  // A note to the caller's own devices (read positions, history hand-off and the
+  // other kinds in docs/sealed-messages.md), sealed under the account key. See docs/sealed-messages.md.
+  rpc SendSelfNote(SendSelfNoteRequest) returns (SendSelfNoteResponse);
+
+  // Read the encrypted account store. See docs/account-store.md.
+  rpc ReadStore(ReadStoreRequest) returns (ReadStoreResponse);
+
+  // Write the encrypted account store, compare-and-swap on its version. A client
+  // that does not hold the account key must never call it.
+  rpc WriteStore(WriteStoreRequest) returns (WriteStoreResponse);
+
+  // The account key box an approver sealed to this device, if any. See docs/identity.md.
+  rpc FetchAccountKey(FetchAccountKeyRequest) returns (FetchAccountKeyResponse);
+
+  // The live event stream for this session. Events are data-free pokes, except a
+  // mailbox page on a stream that named its device, a beat the session asked
+  // for, and a typing or call frame (ephemeral): the client answers each poke by fetching (FetchMailbox for
+  // STATE_DOMAIN_MAILBOX, and so on). Reconnect after a drop; drain the mailbox on
+  // every connect.
+  rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
+  rpc BeatStream(BeatStreamRequest) returns (BeatStreamResponse);
+
+  // SESSIONLESS, metered per IP. The anonymous-token keys: per purpose, the issuing
+  // key, the last one (its tokens still redeem) and the next once it is a day away.
+  // A client checks that a key's id is its hash. See docs/delivery.md, Upload.
+  rpc GetCallTokenKeys(GetCallTokenKeysRequest) returns (GetCallTokenKeysResponse);
+
+  // Blind-sign a batch of tokens for the caller's account (RFC 9578 type 2, RFC
+  // 9474 RSABSSA-SHA384-PSS-Deterministic). Needs a session; metered per account
+  // per purpose at 100, refilling over a day; past it, resource_exhausted.
+  // failed_precondition when key_id is not the issuing key (refetch the keys);
+  // invalid_argument for an unknown purpose, a batch outside 1 to 20, or a blinded
+  // message that is not 256 bytes or, once metered, not below the modulus. The
+  // server learns who asked for how many of which purpose, and keeps only each
+  // account's count and last ask, for about a day.
+  rpc IssueCallTokens(IssueCallTokensRequest) returns (IssueCallTokensResponse);
+}

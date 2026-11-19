@@ -1,0 +1,538 @@
+{
+  "version": 1,
+  "about": [
+    "The golden fixture for PeachyMlsRules: every decision the policy layer makes,",
+    "as inputs plus the verdict every Peachy client must reach.",
+    "docs/mls-core.md 'Golden rules fixture' is the reading guide, mls/core/src/rules.rs is the policy",
+    "and mls/core/src/fixture.rs is the door a replay calls.",
+    "",
+    "Written in NAMES, never numbers, because a reader has to be able to read a row",
+    "and say whether it is what Peachy means. The numbers ride along in reasonCode so",
+    "that a rename which left the discriminant alone, and a renumbering which left the",
+    "name alone, both fail here - they are the two ways this contract breaks.",
+    "",
+    "Replayed by every client, each through its own door and none of them",
+    "re-deciding anything: mls/core/tests/rules_fixture.rs (Rust),",
+    "mls/wasm/tests/node/rules.test.mjs (JavaScript, through the wasm binding),",
+    "mls/swift/Tests/PeachyMLSTests/RulesFixtureTests.swift and",
+    "the Android binding's `RulesFixtureTest` (not in this repository) (the last two",
+    "through peachy_mls_fixture_evaluate_case in the C ABI).",
+    "",
+    "The evaluate cases are EXHAUSTIVE over sender x kind - all 4 x 9 of them - and",
+    "the Rust replay asserts that, so a new ProposalKind or SenderKind fails until",
+    "somebody decides in writing what the policy says about it. That is the whole",
+    "value: a policy nobody wrote down is a policy four clients will each guess at.",
+    "",
+    "The 'group-meta/' cases are the group's own name and photo",
+    "(docs/sealed-messages.md 'The name is in the group'). One input carries it:",
+    "setsGroupMeta, true when a group-context edit changes peachy_group_meta and",
+    "nothing else. It defaults to false.",
+    "",
+    "The 'by-reference/' cases carry byReference: true, a proposal sent on its own or",
+    "named by a commit through its reference rather than carried inline. Peachy",
+    "takes none but a leave; it defaults to false, every proposal a commit carries inline.",
+    "A leave is a Remove by reference with removesOwnLeaf: true, the removed leaf being",
+    "one of the proposer's own person's. It defaults to false.",
+    "",
+    "Reason codes 10-15 belonged to a retired feature and are never reused."
+  ],
+  "rules": { "allowRemoveByAnyMember": true },
+  "codes": {
+    "note": "The pinned #[repr(u32)] discriminants. A replay does not need these - it compares names and reasonCode - but a reader of a Swift or Kotlin port does, and mls/core/src/rules.rs has a unit test asserting the same numbers.",
+    "proposalKind": {
+      "add": 1,
+      "update": 2,
+      "remove": 3,
+      "psk": 4,
+      "reinit": 5,
+      "external_init": 6,
+      "group_context_extensions": 7,
+      "self_remove": 8,
+      "unrecognised": 9
+    },
+    "senderKind": { "member": 1, "external": 2, "new_member_proposal": 3, "new_member_commit": 4 },
+    "denyReason": {
+      "external_join": 1,
+      "external_sender": 2,
+      "non_member_proposal": 3,
+      "psk_unsupported": 4,
+      "reinit_unsupported": 5,
+      "group_context_extensions_unsupported": 6,
+      "self_remove_unsupported": 7,
+      "update_of_another_leaf": 8,
+      "unrecognised_proposal": 9
+    }
+  },
+  "cases": [
+    {
+      "id": "member/add",
+      "why": "The ordinary case. Membership in Peachy is something an existing member did, and this is that act. The key package is still identity-checked separately.",
+      "call": "evaluate",
+      "proposal": { "kind": "add", "sender": "member" },
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "member/update",
+      "why": "Self-rotation of a leaf key, which is most of what MLS is for.",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "member" },
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "member/remove",
+      "why": "Allowed at this layer. Who may remove whom is the group's own policy (admins, by default), judged after these rules on the same commit and pinned by rosters.json. This layer refuses only removes from outside the group. See rules/allowRemoveByAnyMember below for the one knob here.",
+      "call": "evaluate",
+      "proposal": { "kind": "remove", "sender": "member" },
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "member/psk",
+      "why": "Nothing in Peachy mints pre-shared keys. Accepting one means accepting key material with no story about where it came from.",
+      "call": "evaluate",
+      "proposal": { "kind": "psk", "sender": "member" },
+      "expect": { "decision": "deny", "reason": "psk_unsupported", "reasonCode": 4 }
+    },
+    {
+      "id": "member/reinit",
+      "why": "A reinitialisation changes the ciphersuite or version under the members' feet. It is how Peachy will migrate to a post-quantum suite, and it will arrive with a migration design rather than by default.",
+      "call": "evaluate",
+      "proposal": { "kind": "reinit", "sender": "member" },
+      "expect": { "decision": "deny", "reason": "reinit_unsupported", "reasonCode": 5 }
+    },
+    {
+      "id": "member/external_init",
+      "why": "An ExternalInit inside a MEMBER's commit is still an external join being smuggled, so it is named as one rather than as some milder refusal.",
+      "call": "evaluate",
+      "proposal": { "kind": "external_init", "sender": "member" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "member/group_context_extensions",
+      "why": "The group context is what every member's state agrees on. The ONE edit Peachy understands is the group's own name and photo (setsGroupMeta, below); a proposal that changes anything else is unexplained and refused.",
+      "call": "evaluate",
+      "proposal": { "kind": "group_context_extensions", "sender": "member" },
+      "expect": {
+        "decision": "deny",
+        "reason": "group_context_extensions_unsupported",
+        "reasonCode": 6
+      }
+    },
+    {
+      "id": "member/self_remove",
+      "why": "Not because leaving is wrong: Peachy's leave flow is a Remove the client commits for itself, and two ways to leave is two code paths to keep honest.",
+      "call": "evaluate",
+      "proposal": { "kind": "self_remove", "sender": "member" },
+      "expect": { "decision": "deny", "reason": "self_remove_unsupported", "reasonCode": 7 }
+    },
+    {
+      "id": "member/unrecognised",
+      "why": "The default is no. A proposal type this build has never heard of cannot have been reasoned about by anyone.",
+      "call": "evaluate",
+      "proposal": { "kind": "unrecognised", "sender": "member" },
+      "expect": { "decision": "deny", "reason": "unrecognised_proposal", "reasonCode": 9 }
+    },
+    {
+      "id": "external/add",
+      "why": "The next nine cases are one claim repeated: the SENDER is checked before the kind, so no proposal type can quietly let an unauthorised sender through. Peachy sets no external_senders extension, so an External sender is somebody the group never authorised.",
+      "call": "evaluate",
+      "proposal": { "kind": "add", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/update",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/remove",
+      "call": "evaluate",
+      "proposal": { "kind": "remove", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/psk",
+      "call": "evaluate",
+      "proposal": { "kind": "psk", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/reinit",
+      "call": "evaluate",
+      "proposal": { "kind": "reinit", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/external_init",
+      "why": "Both refusals apply. The sender check wins because it runs first, and that ordering is itself the thing under test.",
+      "call": "evaluate",
+      "proposal": { "kind": "external_init", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/group_context_extensions",
+      "call": "evaluate",
+      "proposal": { "kind": "group_context_extensions", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/self_remove",
+      "call": "evaluate",
+      "proposal": { "kind": "self_remove", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "external/unrecognised",
+      "call": "evaluate",
+      "proposal": { "kind": "unrecognised", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "new_member_proposal/add",
+      "why": "A stranger proposing to add themselves (RFC 9420 12.1.8.1). Peachy's roster model is that membership is something an existing member did; if a party can arrive without an Add, the roster stops being a record of decisions anybody made.",
+      "call": "evaluate",
+      "proposal": { "kind": "add", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/update",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/remove",
+      "call": "evaluate",
+      "proposal": { "kind": "remove", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/psk",
+      "call": "evaluate",
+      "proposal": { "kind": "psk", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/reinit",
+      "call": "evaluate",
+      "proposal": { "kind": "reinit", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/external_init",
+      "call": "evaluate",
+      "proposal": { "kind": "external_init", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/group_context_extensions",
+      "call": "evaluate",
+      "proposal": { "kind": "group_context_extensions", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/self_remove",
+      "call": "evaluate",
+      "proposal": { "kind": "self_remove", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_proposal/unrecognised",
+      "call": "evaluate",
+      "proposal": { "kind": "unrecognised", "sender": "new_member_proposal" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/add",
+      "why": "A stranger committing themselves in (RFC 9420 12.1.8.2) - the shape of 'someone who was never invited is now in the group'. Refused at the POLICY layer and not merely by never publishing a GroupInfo, because a GroupInfo leaks the moment one member's storage does, and a rule enforced by not handing out the key is a rule nobody is enforcing.",
+      "call": "evaluate",
+      "proposal": { "kind": "add", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/update",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/remove",
+      "call": "evaluate",
+      "proposal": { "kind": "remove", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/psk",
+      "call": "evaluate",
+      "proposal": { "kind": "psk", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/reinit",
+      "call": "evaluate",
+      "proposal": { "kind": "reinit", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/external_init",
+      "call": "evaluate",
+      "proposal": { "kind": "external_init", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/group_context_extensions",
+      "call": "evaluate",
+      "proposal": { "kind": "group_context_extensions", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/self_remove",
+      "call": "evaluate",
+      "proposal": { "kind": "self_remove", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/unrecognised",
+      "call": "evaluate",
+      "proposal": { "kind": "unrecognised", "sender": "new_member_commit" },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "member/update-of-another-leaf",
+      "why": "targetsSenderLeaf is the one input that is not a kind or a sender, and it is consulted for Update alone. An Update proposal only ever refers to the sender's own leaf, so anything else is malformed intent rather than an attack with a name.",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "member", "targetsSenderLeaf": false },
+      "expect": { "decision": "deny", "reason": "update_of_another_leaf", "reasonCode": 8 }
+    },
+    {
+      "id": "external/update-of-another-leaf",
+      "why": "The sender check still runs first, so this is external_sender and not update_of_another_leaf. Which of two true refusals is REPORTED is part of the contract: a client showing a different one is a client whose logs will not line up with anyone else's.",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "external", "targetsSenderLeaf": false },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "new_member_proposal/update-of-another-leaf",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "new_member_proposal", "targetsSenderLeaf": false },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "new_member_commit/update-of-another-leaf",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "new_member_commit", "targetsSenderLeaf": false },
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "strict/member/remove",
+      "why": "With allowRemoveByAnyMember false, this layer closes member removes. It has no roles to consult, so the answer is no, reported as non_member_proposal - the only reason code reached through a configuration rather than a shape. No shipped build sets it false; pinning it means a binding that drops the rules block fails here.",
+      "call": "evaluate",
+      "rules": { "allowRemoveByAnyMember": false },
+      "proposal": { "kind": "remove", "sender": "member" },
+      "expect": { "decision": "deny", "reason": "non_member_proposal", "reasonCode": 3 }
+    },
+    {
+      "id": "strict/member/add",
+      "why": "Closing removes must not close anything else.",
+      "call": "evaluate",
+      "rules": { "allowRemoveByAnyMember": false },
+      "proposal": { "kind": "add", "sender": "member" },
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "strict/external/remove",
+      "why": "And it must not change which refusal a non-member gets: the sender check is still first.",
+      "call": "evaluate",
+      "rules": { "allowRemoveByAnyMember": false },
+      "proposal": { "kind": "remove", "sender": "external" },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "commit-sender/member",
+      "why": "Who may commit at all, asked separately from what the commit proposes. An external commit can carry no proposal this policy would object to and still be an external commit.",
+      "call": "evaluateCommitSender",
+      "sender": "member",
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "commit-sender/external",
+      "call": "evaluateCommitSender",
+      "sender": "external",
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "commit-sender/new_member_proposal",
+      "call": "evaluateCommitSender",
+      "sender": "new_member_proposal",
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "commit-sender/new_member_commit",
+      "call": "evaluateCommitSender",
+      "sender": "new_member_commit",
+      "expect": { "decision": "deny", "reason": "external_join", "reasonCode": 1 }
+    },
+    {
+      "id": "all/empty",
+      "why": "A commit that proposes nothing - a bare path update - is allowed. An empty list defaulting to a refusal would break rekeying.",
+      "call": "evaluateAll",
+      "proposals": [],
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "all/three-allowed",
+      "why": "A commit may carry several proposals, and all of them have to pass.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "add", "sender": "member" },
+        { "kind": "update", "sender": "member" },
+        { "kind": "remove", "sender": "member" }
+      ],
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "all/first-denial-wins",
+      "why": "The FIRST denial in the order given, so a client's reported reason does not depend on iteration order inside anybody's implementation. Both reinit and psk would refuse here; reinit is earlier.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "add", "sender": "member" },
+        { "kind": "reinit", "sender": "member" },
+        { "kind": "psk", "sender": "member" }
+      ],
+      "expect": { "decision": "deny", "reason": "reinit_unsupported", "reasonCode": 5 }
+    },
+    {
+      "id": "all/first-denial-wins-reversed",
+      "why": "The same two proposals the other way round, answering psk_unsupported. Without this pair, an implementation that returned the lowest reason code would pass the case above and still be wrong.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "psk", "sender": "member" },
+        { "kind": "reinit", "sender": "member" }
+      ],
+      "expect": { "decision": "deny", "reason": "psk_unsupported", "reasonCode": 4 }
+    },
+    {
+      "id": "all/one-bad-sender-among-members",
+      "why": "A mixed-sender commit. One unauthorised sender is enough.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "add", "sender": "member" },
+        { "kind": "add", "sender": "external" }
+      ],
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "all/targets-another-leaf-first",
+      "why": "targetsSenderLeaf survives the list form - a per-proposal input, not a per-call one.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "update", "sender": "member", "targetsSenderLeaf": false },
+        { "kind": "reinit", "sender": "member" }
+      ],
+      "expect": { "decision": "deny", "reason": "update_of_another_leaf", "reasonCode": 8 }
+    },
+    {
+      "id": "group-meta/rename-by-a-plain-member",
+      "why": "docs/sealed-messages.md 'The name is in the group': a group's name and photo live in its own state (peachy_group_meta), and any member may change them: Peachy's default for a new group's attributes is 'all members'. setsGroupMeta means the proposal changes that extension and NOTHING else; anything riding with it reads as the plain group_context_extensions case above.",
+      "call": "evaluate",
+      "proposal": { "kind": "group_context_extensions", "sender": "member", "setsGroupMeta": true },
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "all/rename-with-a-remove",
+      "why": "A rename is one proposal among others like any edit: a commit that renames and removes somebody is judged proposal by proposal, and both are allowed.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "group_context_extensions", "sender": "member", "setsGroupMeta": true },
+        { "kind": "remove", "sender": "member" }
+      ],
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "by-reference/remove",
+      "why": "A proposal BY REFERENCE - sent on its own, or named by a commit through its reference - is a member's change that a different member commits. Every Peachy change is a commit carrying its own proposals inline, so none is taken: refused when it arrives, before the proposal store, and refused inside a commit. Without this, a queued Remove from somebody who may not remove would ride into an admin's ordinary commit and be judged as the admin's.",
+      "call": "evaluate",
+      "proposal": { "kind": "remove", "sender": "member", "byReference": true },
+      "expect": { "decision": "deny", "reason": "proposal_by_reference", "reasonCode": 23 }
+    },
+    {
+      "id": "by-reference/leave",
+      "why": "A LEAVE: a member cannot commit its own removal, so it proposes the removal of its own person's leaves on their own and another member commits them. The one proposal by reference Peachy takes. The group's policy lets anybody remove their own leaves.",
+      "call": "evaluate",
+      "proposal": { "kind": "remove", "sender": "member", "byReference": true, "removesOwnLeaf": true },
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "by-reference/leave-is-a-remove",
+      "why": "Only a Remove is a leave. Any other kind by reference is refused, whatever removesOwnLeaf says.",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "member", "byReference": true, "removesOwnLeaf": true },
+      "expect": { "decision": "deny", "reason": "proposal_by_reference", "reasonCode": 23 }
+    },
+    {
+      "id": "by-reference/leave-sender-first",
+      "why": "The sender is still judged first: a leave from outside the tree is an external sender's.",
+      "call": "evaluate",
+      "proposal": { "kind": "remove", "sender": "external", "byReference": true, "removesOwnLeaf": true },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "by-reference/group-meta",
+      "why": "The same for a change to the group's own state: a queued meta change naming new admins must never reach a commit somebody else builds. byReference is checked before the kind, so even an edit the kind rules would allow is refused.",
+      "call": "evaluate",
+      "proposal": { "kind": "group_context_extensions", "sender": "member", "setsGroupMeta": true, "byReference": true },
+      "expect": { "decision": "deny", "reason": "proposal_by_reference", "reasonCode": 23 }
+    },
+    {
+      "id": "by-reference/add",
+      "why": "Every kind, the ordinary ones included: an Add by reference is refused like the rest.",
+      "call": "evaluate",
+      "proposal": { "kind": "add", "sender": "member", "byReference": true },
+      "expect": { "decision": "deny", "reason": "proposal_by_reference", "reasonCode": 23 }
+    },
+    {
+      "id": "by-reference/update",
+      "why": "An Update can only travel by reference, so a member's own leaf changes through the committer's update path (self_update, refresh_credential) and never through a proposal.",
+      "call": "evaluate",
+      "proposal": { "kind": "update", "sender": "member", "byReference": true },
+      "expect": { "decision": "deny", "reason": "proposal_by_reference", "reasonCode": 23 }
+    },
+    {
+      "id": "by-reference/sender-first",
+      "why": "The sender is still judged first: an external sender by reference is named as an external sender.",
+      "call": "evaluate",
+      "proposal": { "kind": "add", "sender": "external", "byReference": true },
+      "expect": { "decision": "deny", "reason": "external_sender", "reasonCode": 2 }
+    },
+    {
+      "id": "all/an-inline-add-with-a-swept-remove",
+      "why": "An ordinary commit - an Add the committer carries inline - that also names a queued Remove by reference is refused whole. The commit is not split into the part that would pass.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "add", "sender": "member" },
+        { "kind": "remove", "sender": "member", "byReference": true }
+      ],
+      "expect": { "decision": "deny", "reason": "proposal_by_reference", "reasonCode": 23 }
+    },
+    {
+      "id": "all/a-leave-commit",
+      "why": "The commit another member builds for a person leaving names each of their leaves' Removes by reference, and nothing else. Allowed.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "remove", "sender": "member", "byReference": true, "removesOwnLeaf": true },
+        { "kind": "remove", "sender": "member", "byReference": true, "removesOwnLeaf": true }
+      ],
+      "expect": { "decision": "allow" }
+    },
+    {
+      "id": "all/a-leave-with-a-swept-rename",
+      "why": "A leave does not open the door for anything else queued: a commit naming a leave and another proposal by reference is refused whole.",
+      "call": "evaluateAll",
+      "proposals": [
+        { "kind": "remove", "sender": "member", "byReference": true, "removesOwnLeaf": true },
+        { "kind": "group_context_extensions", "sender": "member", "setsGroupMeta": true, "byReference": true }
+      ],
+      "expect": { "decision": "deny", "reason": "proposal_by_reference", "reasonCode": 23 }
+    }
+  ]
+}

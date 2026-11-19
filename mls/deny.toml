@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT
+# What the workspace may depend on, checked by `cargo deny check` from `mls/`
+# (cargo-deny 0.18 or later). It covers the workspace in `Cargo.toml`; the
+# fuzz workspace in `fuzz/` is not shipped and is not checked.
+
+[graph]
+all-features = true
+
+[advisories]
+# The RustSec advisory database. A vulnerability or an unsound crate fails the
+# check; an unmaintained crate is reported for the workspace's own
+# dependencies only.
+version = 2
+yanked = "deny"
+unmaintained = "workspace"
+ignore = [
+    # crypto-bigint 0.5 is reached only through p256 and p384, which OpenMLS's
+    # crypto provider carries for the NIST-curve ciphersuites. The core speaks
+    # one suite, 0x004F (X-Wing, Ed25519), and refuses every other, so no
+    # P-256 or P-384 operation ever runs. The fix is in crypto-bigint 0.7,
+    # which the pinned OpenMLS crates cannot take; remove this entry when
+    # they can.
+    { id = "RUSTSEC-2026-0387", reason = "only on NIST-curve paths the core never runs" },
+    # SQLite before 3.54 can return stale page-cache memory when it opens a
+    # database beside a crafted `-wal` file. The store's database and its
+    # `-wal` sit in the app's private storage, so planting one needs local
+    # write access to that storage, which already gives an attacker the
+    # store. No libsqlite3-sys release bundles a fixed SQLCipher yet (0.39
+    # pins sqlcipher-src on SQLite 3.53.4); remove this entry when one does.
+    { id = "RUSTSEC-2026-0459", reason = "store files are app-private; no SQLCipher build is fixed yet" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+# Permissive licenses only. A crate offered under several licenses passes when
+# any one of them is listed here.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+]
+# MPL-2.0 is file-level copyleft: allowed for the HPKE implementation the
+# ciphersuite needs and for the header generator used at build time, and for
+# no other crate.
+exceptions = [
+    { allow = ["MPL-2.0"], crate = "hpke-rs" },
+    { allow = ["MPL-2.0"], crate = "hpke-rs-crypto" },
+    { allow = ["MPL-2.0"], crate = "hpke-rs-rust-crypto" },
+    { allow = ["MPL-2.0"], crate = "cbindgen" },
+]
+
+[licenses.private]
+# The workspace's own crates are not published and carry the workspace license.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# The members depend on each other by path and are never published.
+allow-wildcard-paths = true
+
+[sources]
+# crates.io only: no git dependencies, no other registry.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# Read by every cargo build run inside mls/ (the workspace and the bindings'
+# build scripts), unless RUSTFLAGS is set, which replaces it. cargo-fuzz sets
+# RUSTFLAGS for its instrumentation, so the targets under mls/fuzz build
+# without this and run whichever GHASH backend polyval picks; they test what
+# the core parses, not what it wipes.
+#
+# On x86 and x86_64, polyval (AES-GCM's GHASH) picks its backend at run time,
+# and that dispatch keeps the backend in a type with no Drop, so the GHASH key
+# of every AES-GCM cipher is freed unwiped, ours and our dependencies' alike.
+# Its portable backend wipes it. Forcing that backend costs speed only on x86,
+# which ships only as the Android x86_64 library (the Kotlin binding's native build),
+# and the core refuses to build for Android x86 without it (mls/core/src/lib.rs).
+# ARM already runs the portable backend: its PMULL one is opt-in
+# (`--cfg polyval_armv8`), and nothing here sets it.
+[target.'cfg(any(target_arch = "x86_64", target_arch = "x86"))']
+rustflags = ["--cfg", "polyval_force_soft"]

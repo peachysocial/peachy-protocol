@@ -1,0 +1,191 @@
+{
+  "_about": [
+    "Golden cases for the hello lane frame, which hands its sender's access key to the whole conversation.",
+    "Normative: docs/sealed-messages.md §Hellos.",
+    "The sender is never in the payload: it is the MLS sender, read from the decrypted credential, and the key is kept under that actor exactly as a transcript frame's `ak` is.",
+    "Every current build reads a hello and sends one: after applying a Welcome, and after applying a commit that brings an account new to the tree (the spec section says when). Builds from before the reading half drop one unread, as any lane frame they do not know.",
+    "Parsing is strict JSON, as for receipts: a duplicate key (compared after unescaping) or a trailing comma makes the payload not a hello. `v` must be the JSON number 1. `ak` is read as a transcript frame's `ak`: standard padded base64 of exactly 16 bytes; a hello without a valid one is not a hello. An unknown extra key is ignored.",
+    "`encode` gives a hello, the exact keys the wire carries, and what parsing it back gives. `parse` gives a wire string and what a reader reads out of it, or null.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "cases": [
+    {
+      "id": "encode/canonical",
+      "why": "A hello carries its kind, its version and the sender's access key, and nothing else.",
+      "call": "encode",
+      "hello": {
+        "accessKey": "AAECAwQFBgcICQoLDA0ODw=="
+      },
+      "keys": [
+        "ak",
+        "peachy",
+        "v"
+      ],
+      "expect": {
+        "accessKey": "AAECAwQFBgcICQoLDA0ODw=="
+      }
+    },
+    {
+      "id": "parse/canonical",
+      "why": "The canonical wire.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}",
+      "expect": {
+        "accessKey": "AAECAwQFBgcICQoLDA0ODw=="
+      }
+    },
+    {
+      "id": "parse/reordered",
+      "why": "Key order carries no meaning.",
+      "call": "parse",
+      "wire": "{\"ak\":\"q83vASNFZ4mrze8BI0VniQ==\",\"v\":1,\"peachy\":\"hello\"}",
+      "expect": {
+        "accessKey": "q83vASNFZ4mrze8BI0VniQ=="
+      }
+    },
+    {
+      "id": "parse/unknown-key",
+      "why": "An unknown extra key is ignored.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\",\"z\":\"later\"}",
+      "expect": {
+        "accessKey": "AAECAwQFBgcICQoLDA0ODw=="
+      }
+    },
+    {
+      "id": "parse/whitespace",
+      "why": "Insignificant JSON whitespace is allowed.",
+      "call": "parse",
+      "wire": "{ \"peachy\" : \"hello\", \"v\" : 1, \"ak\" : \"AAECAwQFBgcICQoLDA0ODw==\" }",
+      "expect": {
+        "accessKey": "AAECAwQFBgcICQoLDA0ODw=="
+      }
+    },
+    {
+      "id": "parse/no-ak",
+      "why": "A hello without a key carries nothing.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1}",
+      "expect": null
+    },
+    {
+      "id": "parse/ak-empty",
+      "why": "An empty key is no key.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/ak-15-bytes",
+      "why": "A key is exactly 16 bytes.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0O\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/ak-17-bytes",
+      "why": "A key is exactly 16 bytes.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODxA=\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/ak-unpadded",
+      "why": "A key is standard padded base64: 22 characters and `==`.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/ak-url-alphabet",
+      "why": "The URL-safe alphabet is not the standard one.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"-_8AAAAAAAAAAAAAAAAAAA==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/ak-number",
+      "why": "A key is a string.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":16}",
+      "expect": null
+    },
+    {
+      "id": "parse/version-2",
+      "why": "An unknown version is dropped.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":2,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/version-string",
+      "why": "The version is the JSON number 1.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":\"1\",\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/version-true",
+      "why": "`true` is not version 1.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":true,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-version",
+      "why": "A frame without a version is dropped.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/other-kind",
+      "why": "Another lane frame is not a hello, even with an `ak`.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"11111111-1111-1111-1111-111111111111\",\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/kind-case",
+      "why": "The kind is compared exactly.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"Hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-ak",
+      "why": "Strict JSON: a key named twice makes the payload not a hello, so no two readers keep different keys.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\",\"ak\":\"q83vASNFZ4mrze8BI0VniQ==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-escaped",
+      "why": "Duplicates are compared after unescaping.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\",\"\\u0061k\":\"q83vASNFZ4mrze8BI0VniQ==\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/trailing-comma",
+      "why": "Strict JSON: a trailing comma makes the payload not a hello.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\",}",
+      "expect": null
+    },
+    {
+      "id": "parse/not-json",
+      "why": "Not JSON.",
+      "call": "parse",
+      "wire": "hello",
+      "expect": null
+    },
+    {
+      "id": "parse/array",
+      "why": "Not an object.",
+      "call": "parse",
+      "wire": "[{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAECAwQFBgcICQoLDA0ODw==\"}]",
+      "expect": null
+    }
+  ]
+}

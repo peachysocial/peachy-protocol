@@ -1,0 +1,5817 @@
+{
+  "version": 1,
+  "about": [
+    "The golden fixture for encrypted calls (docs/calls.md §Keys, §Signaling, §Ringing;",
+    "mls/core/src/call/): the key schedule off the MLS exporter, the AES key the WebRTC",
+    "frame-encryption layer derives from a sender key, the signaling codec and its two lanes,",
+    "ENVELOPE_KIND_CALL, and the ring-state reducer.",
+    "Written by an independent implementation (a separate Python generator, not in this repository: Python's",
+    "hmac/hashlib, a hand-written protobuf encoder, the cryptography package, and ring",
+    "expectations written out by hand from the spec), so the Rust replay is a",
+    "second opinion. Replayed through the fixture door (kind \"call\") in Rust, JavaScript",
+    "and Swift (and, in Peachy's Android client, Kotlin). Each case has exactly one of",
+    "`expect` or `expectError` (a substring of the refusal's message)."
+  ],
+  "cases": [
+    {
+      "id": "constants",
+      "kind": "call",
+      "call": "constants",
+      "why": "Every number and label four clients must agree on, in one place.",
+      "expect": {
+        "exporterLabel": "peachy call v1",
+        "callRootBytes": 32,
+        "callIdBytes": 16,
+        "senderInfo": "peachy call sender",
+        "senderKeyBytes": 16,
+        "frameRatchetSalt": "peachy call frame v1",
+        "frameKeyInfoBytes": 128,
+        "frameKeyBytes": 16,
+        "keyRingSize": 256,
+        "keyGraceMs": 10000,
+        "liveExporterLabel": "peachy call live v1",
+        "liveKeyBytes": 32,
+        "livePaddingBlock": 128,
+        "liveMaxSkewMs": 120000,
+        "liveMaxSenders": 1024,
+        "laneMls": 1,
+        "laneLive": 2,
+        "envelopeKind": 6,
+        "signalVersion": 1,
+        "maxSignalBytes": 16384,
+        "maxSdpBytes": 15360,
+        "ringCap": 16,
+        "ringTimeoutMs": 60000,
+        "offerMaxAgeMs": 60000,
+        "offerMaxSkewMs": 120000,
+        "selfUpdateIntervalMs": 600000,
+        "exporterLabelV2": "peachy call v2",
+        "senderInfoV2": "peachy call sender v2",
+        "mediaSecretBytes": 32,
+        "mediaAdvanceInfo": "peachy call media advance",
+        "mediaKeyInfo": "peachy call media key v2",
+        "mediaPublicKeyBytes": 32,
+        "mediaMaxGrants": 24,
+        "mediaMaxAdvance": 64,
+        "mediaRotateDelayMs": 5000
+      }
+    },
+    {
+      "id": "sender-key-counting-leaf-0-epoch-0",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "leafIndex": 0,
+      "epoch": 0,
+      "expect": {
+        "senderKeyHex": "7e32be237a5c7136d277bc502c756509",
+        "keyIndex": 0,
+        "frameKeyHex": "28b9751c0848dc3528032d2881b18a4b"
+      }
+    },
+    {
+      "id": "sender-key-counting-leaf-1-epoch-1",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "leafIndex": 1,
+      "epoch": 1,
+      "expect": {
+        "senderKeyHex": "c196aadd868518a7430bb30a9f4f65a4",
+        "keyIndex": 1,
+        "frameKeyHex": "01a819509d88db7d8ddff10b0d6d6ffd"
+      }
+    },
+    {
+      "id": "sender-key-counting-leaf-7-epoch-255",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "leafIndex": 7,
+      "epoch": 255,
+      "expect": {
+        "senderKeyHex": "05af5671371b7e25a73ced5e91074b9d",
+        "keyIndex": 255,
+        "frameKeyHex": "0d558c72417ff6d4300c612987fb0e00"
+      }
+    },
+    {
+      "id": "sender-key-counting-leaf-12-epoch-256",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "leafIndex": 12,
+      "epoch": 256,
+      "expect": {
+        "senderKeyHex": "bae807ed92febcbee56c4153d1e07700",
+        "keyIndex": 0,
+        "frameKeyHex": "d4ad3c73f29b01292da6a76321c39e3f"
+      }
+    },
+    {
+      "id": "sender-key-counting-leaf-4294967295-epoch-9007199254740991",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "leafIndex": 4294967295,
+      "epoch": 9007199254740991,
+      "expect": {
+        "senderKeyHex": "2acefa25e26c6112798a4e27917e8808",
+        "keyIndex": 255,
+        "frameKeyHex": "1dd1cfa79c758a647954d968cf71d5e5"
+      }
+    },
+    {
+      "id": "sender-key-ones-leaf-0-epoch-0",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "leafIndex": 0,
+      "epoch": 0,
+      "expect": {
+        "senderKeyHex": "19462d06ec193ff5a20f942313da8838",
+        "keyIndex": 0,
+        "frameKeyHex": "18b9ec0a4371c0f70812e821ae21d6e5"
+      }
+    },
+    {
+      "id": "sender-key-ones-leaf-1-epoch-1",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "leafIndex": 1,
+      "epoch": 1,
+      "expect": {
+        "senderKeyHex": "c236c2baf95ea0df40c67c22ba31dbd7",
+        "keyIndex": 1,
+        "frameKeyHex": "55ab8030d3a7879f36b2901f032e21b9"
+      }
+    },
+    {
+      "id": "sender-key-ones-leaf-7-epoch-255",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "leafIndex": 7,
+      "epoch": 255,
+      "expect": {
+        "senderKeyHex": "a1c21f7dd0272bb73a0fedd6ee40ffb1",
+        "keyIndex": 255,
+        "frameKeyHex": "2f9b9c33a12878531d4f27b318dfba63"
+      }
+    },
+    {
+      "id": "sender-key-ones-leaf-12-epoch-256",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "leafIndex": 12,
+      "epoch": 256,
+      "expect": {
+        "senderKeyHex": "4c51dcc1ea15463e8cbf41871f88e886",
+        "keyIndex": 0,
+        "frameKeyHex": "d7b74e9c404172d23cdf65c7fdff6450"
+      }
+    },
+    {
+      "id": "sender-key-ones-leaf-4294967295-epoch-9007199254740991",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "leafIndex": 4294967295,
+      "epoch": 9007199254740991,
+      "expect": {
+        "senderKeyHex": "207368681631ecc837d7f4c69a4a6e86",
+        "keyIndex": 255,
+        "frameKeyHex": "839c59353d4c1406b477b0a069d71cac"
+      }
+    },
+    {
+      "id": "sender-key-exported-leaf-0-epoch-0",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "leafIndex": 0,
+      "epoch": 0,
+      "expect": {
+        "senderKeyHex": "a21c551527f92d2a6bbe98a6dc83be49",
+        "keyIndex": 0,
+        "frameKeyHex": "c64049fdde10902049fc1dc6d04b6317"
+      }
+    },
+    {
+      "id": "sender-key-exported-leaf-1-epoch-1",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "leafIndex": 1,
+      "epoch": 1,
+      "expect": {
+        "senderKeyHex": "c6305ab4891fcb925918777dffe90b71",
+        "keyIndex": 1,
+        "frameKeyHex": "649ae360b9d2e7028b2af686e06211ce"
+      }
+    },
+    {
+      "id": "sender-key-exported-leaf-7-epoch-255",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "leafIndex": 7,
+      "epoch": 255,
+      "expect": {
+        "senderKeyHex": "d793476a09e773d1a8aac76ab5c8caa9",
+        "keyIndex": 255,
+        "frameKeyHex": "af89bad8f9678c363bfbaa15277d0339"
+      }
+    },
+    {
+      "id": "sender-key-exported-leaf-12-epoch-256",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "leafIndex": 12,
+      "epoch": 256,
+      "expect": {
+        "senderKeyHex": "4e5167828fe2bad6def93cc4ce0391ca",
+        "keyIndex": 0,
+        "frameKeyHex": "e8a3b6302610407712f85b85c3d70c14"
+      }
+    },
+    {
+      "id": "sender-key-exported-leaf-4294967295-epoch-9007199254740991",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "HKDF-Expand(call_root, 'peachy call sender' || u32be(leaf), 16); key index e mod 256; the AES key FrameCryptor derives with HKDF under Peachy's ratchet salt.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "leafIndex": 4294967295,
+      "epoch": 9007199254740991,
+      "expect": {
+        "senderKeyHex": "4d09a0fd0c5ac18810bbc48d89a65d75",
+        "keyIndex": 255,
+        "frameKeyHex": "44a94352dfe96b16d3e453a15cff71a8"
+      }
+    },
+    {
+      "id": "sender-key-short-root",
+      "kind": "call",
+      "call": "senderKey",
+      "why": "A call root is the 32-byte exporter output; 16 bytes is somebody else's secret.",
+      "callRootHex": "00000000000000000000000000000000",
+      "leafIndex": 0,
+      "epoch": 0,
+      "expectError": "a call root is 32 bytes"
+    },
+    {
+      "id": "encode-offer-video-ring",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "offer",
+        "media": "video",
+        "ring": true,
+        "createdAtMs": 1789516800000
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff1a0b080110011880c08dbc8a34"
+      }
+    },
+    {
+      "id": "decode-offer-video-ring",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff1a0b080110011880c08dbc8a34",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "offer",
+          "media": "video",
+          "ring": true,
+          "createdAtMs": 1789516800000
+        }
+      }
+    },
+    {
+      "id": "encode-offer-audio-notice",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "offer",
+        "media": "audio",
+        "ring": false,
+        "createdAtMs": 0
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff1a00"
+      }
+    },
+    {
+      "id": "decode-offer-audio-notice",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff1a00",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "offer",
+          "media": "audio",
+          "ring": false,
+          "createdAtMs": 0
+        }
+      }
+    },
+    {
+      "id": "encode-answer",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "answer"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2200"
+      }
+    },
+    {
+      "id": "decode-answer",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2200",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "answer"
+        }
+      }
+    },
+    {
+      "id": "encode-hangup-normal",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "hangup",
+        "reason": "normal"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2a00"
+      }
+    },
+    {
+      "id": "decode-hangup-normal",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a00",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "normal"
+        }
+      }
+    },
+    {
+      "id": "encode-hangup-declined",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "hangup",
+        "reason": "declined"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2a020801"
+      }
+    },
+    {
+      "id": "decode-hangup-declined",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a020801",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "declined"
+        }
+      }
+    },
+    {
+      "id": "encode-hangup-busy",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "hangup",
+        "reason": "busy"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2a020802"
+      }
+    },
+    {
+      "id": "decode-hangup-busy",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a020802",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "busy"
+        }
+      }
+    },
+    {
+      "id": "encode-hangup-accepted-elsewhere",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "hangup",
+        "reason": "accepted_elsewhere"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2a020803"
+      }
+    },
+    {
+      "id": "decode-hangup-accepted-elsewhere",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a020803",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "accepted_elsewhere"
+        }
+      }
+    },
+    {
+      "id": "encode-hangup-declined-elsewhere",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "hangup",
+        "reason": "declined_elsewhere"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2a020804"
+      }
+    },
+    {
+      "id": "decode-hangup-declined-elsewhere",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a020804",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "declined_elsewhere"
+        }
+      }
+    },
+    {
+      "id": "encode-hangup-busy-elsewhere",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "hangup",
+        "reason": "busy_elsewhere"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2a020805"
+      }
+    },
+    {
+      "id": "decode-hangup-busy-elsewhere",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a020805",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "busy_elsewhere"
+        }
+      }
+    },
+    {
+      "id": "encode-hangup-need-permission",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "hangup",
+        "reason": "need_permission"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff2a020806"
+      }
+    },
+    {
+      "id": "decode-hangup-need-permission",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a020806",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "need_permission"
+        }
+      }
+    },
+    {
+      "id": "encode-joined",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "joined",
+        "participantId": "p-7f3a",
+        "sessionId": "cf-session-1",
+        "trackNames": [
+          "audio-0",
+          "video-0",
+          ""
+        ],
+        "leafIndex": 3
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff322c0a06702d37663361120c63662d73657373696f6e2d311a07617564696f2d301a07766964656f2d301a002003"
+      }
+    },
+    {
+      "id": "decode-joined",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff322c0a06702d37663361120c63662d73657373696f6e2d311a07617564696f2d301a07766964656f2d301a002003",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "joined",
+          "participantId": "p-7f3a",
+          "sessionId": "cf-session-1",
+          "trackNames": [
+            "audio-0",
+            "video-0",
+            ""
+          ],
+          "leafIndex": 3
+        }
+      }
+    },
+    {
+      "id": "encode-joined-leaf-0-no-tracks",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "joined",
+        "participantId": "p",
+        "sessionId": "s",
+        "trackNames": [],
+        "leafIndex": 0
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff32060a0170120173"
+      }
+    },
+    {
+      "id": "decode-joined-leaf-0-no-tracks",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff32060a0170120173",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "joined",
+          "participantId": "p",
+          "sessionId": "s",
+          "trackNames": [],
+          "leafIndex": 0
+        }
+      }
+    },
+    {
+      "id": "encode-joined-v2",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "joined",
+        "participantId": "p-7f3a",
+        "sessionId": "",
+        "trackNames": [],
+        "leafIndex": 3,
+        "mediaKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff322c0a06702d3766336120032a20202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+      }
+    },
+    {
+      "id": "decode-joined-v2",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff322c0a06702d3766336120032a20202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "joined",
+          "participantId": "p-7f3a",
+          "sessionId": "",
+          "trackNames": [],
+          "leafIndex": 3,
+          "mediaKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+        }
+      }
+    },
+    {
+      "id": "encode-joined-v2-started",
+      "kind": "call",
+      "call": "encode",
+      "why": "A v2 Joined names when its participation started (field 6); a decoder that does not know the field skips it.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "joined",
+        "participantId": "p-7f3a",
+        "sessionId": "",
+        "trackNames": [],
+        "leafIndex": 3,
+        "mediaKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "startedAtMs": 1789516800123
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff32330a06702d3766336120032a20202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f30fbc08dbc8a34"
+      }
+    },
+    {
+      "id": "decode-joined-v2-started",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff32330a06702d3766336120032a20202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f30fbc08dbc8a34",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "joined",
+          "participantId": "p-7f3a",
+          "sessionId": "",
+          "trackNames": [],
+          "leafIndex": 3,
+          "mediaKeyHex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+          "startedAtMs": 1789516800123
+        }
+      }
+    },
+    {
+      "id": "encode-media-key-two-grants",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "mediaKey",
+        "generation": 7,
+        "rotated": true,
+        "grants": [
+          {
+            "toLeaf": 0,
+            "encHex": "0101010101010101010101010101010101010101010101010101010101010101",
+            "ciphertextHex": "0202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202"
+          },
+          {
+            "toLeaf": 5,
+            "encHex": "0303030303030303030303030303030303030303030303030303030303030303",
+            "ciphertextHex": "0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"
+          }
+        ]
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff72f201080710011a74122001010101010101010101010101010101010101010101010101010101010101011a5002020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202021a760805122003030303030303030303030303030303030303030303030303030303030303031a500404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"
+      }
+    },
+    {
+      "id": "decode-media-key-two-grants",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff72f201080710011a74122001010101010101010101010101010101010101010101010101010101010101011a5002020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202021a760805122003030303030303030303030303030303030303030303030303030303030303031a500404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "mediaKey",
+          "generation": 7,
+          "rotated": true,
+          "grants": [
+            {
+              "toLeaf": 0,
+              "encHex": "0101010101010101010101010101010101010101010101010101010101010101",
+              "ciphertextHex": "0202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202"
+            },
+            {
+              "toLeaf": 5,
+              "encHex": "0303030303030303030303030303030303030303030303030303030303030303",
+              "ciphertextHex": "0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "encode-media-key-advance",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "mediaKey",
+        "generation": 1,
+        "rotated": false,
+        "grants": [
+          {
+            "toLeaf": 2,
+            "encHex": "0505050505050505050505050505050505050505050505050505050505050505",
+            "ciphertextHex": "06060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606"
+          }
+        ]
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff725b08011a570802122005050505050505050505050505050505050505050505050505050505050505051a3106060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606"
+      }
+    },
+    {
+      "id": "decode-media-key-advance",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff725b08011a570802122005050505050505050505050505050505050505050505050505050505050505051a3106060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "mediaKey",
+          "generation": 1,
+          "rotated": false,
+          "grants": [
+            {
+              "toLeaf": 2,
+              "encHex": "0505050505050505050505050505050505050505050505050505050505050505",
+              "ciphertextHex": "06060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606060606"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "encode-left",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "left",
+        "participantId": "p-7f3a"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff3a080a06702d37663361"
+      }
+    },
+    {
+      "id": "decode-left",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff3a080a06702d37663361",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "left",
+          "participantId": "p-7f3a"
+        }
+      }
+    },
+    {
+      "id": "encode-raise-hand",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "raiseHand",
+        "up": true
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff42020801"
+      }
+    },
+    {
+      "id": "decode-raise-hand",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff42020801",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "raiseHand",
+          "up": true
+        }
+      }
+    },
+    {
+      "id": "encode-lower-hand",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "raiseHand",
+        "up": false
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff4200"
+      }
+    },
+    {
+      "id": "decode-lower-hand",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff4200",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "raiseHand",
+          "up": false
+        }
+      }
+    },
+    {
+      "id": "encode-react",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "react",
+        "emoji": "🎉"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff4a060a04f09f8e89"
+      }
+    },
+    {
+      "id": "decode-react",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff4a060a04f09f8e89",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "react",
+          "emoji": "🎉"
+        }
+      }
+    },
+    {
+      "id": "encode-remote-mute",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "remoteMute",
+        "target": "p-7f3a"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff52080a06702d37663361"
+      }
+    },
+    {
+      "id": "decode-remote-mute",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff52080a06702d37663361",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "remoteMute",
+          "target": "p-7f3a"
+        }
+      }
+    },
+    {
+      "id": "encode-remove",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "remove",
+        "target": "p-7f3a"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff5a080a06702d37663361"
+      }
+    },
+    {
+      "id": "decode-remove",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff5a080a06702d37663361",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "remove",
+          "target": "p-7f3a"
+        }
+      }
+    },
+    {
+      "id": "encode-media",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "media",
+        "audioOn": true,
+        "videoOn": false,
+        "presenting": true
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff620408011801"
+      }
+    },
+    {
+      "id": "decode-media",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff620408011801",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "media",
+          "audioOn": true,
+          "videoOn": false,
+          "presenting": true
+        }
+      }
+    },
+    {
+      "id": "encode-media-all-off",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "media",
+        "audioOn": false,
+        "videoOn": false,
+        "presenting": false
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff6200"
+      }
+    },
+    {
+      "id": "decode-media-all-off",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff6200",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "media",
+          "audioOn": false,
+          "videoOn": false,
+          "presenting": false
+        }
+      }
+    },
+    {
+      "id": "encode-direct-offer",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "direct",
+        "toLeaf": 0,
+        "offer": true,
+        "sdp": "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=fingerprint:sha-256 AA:BB\r\n"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff6a4c1248763d300d0a6f3d2d2031203220494e20495034203132372e302e302e310d0a733d2d0d0a743d3020300d0a613d66696e6765727072696e743a7368612d3235362041413a42420d0a1801"
+      }
+    },
+    {
+      "id": "decode-direct-offer",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff6a4c1248763d300d0a6f3d2d2031203220494e20495034203132372e302e302e310d0a733d2d0d0a743d3020300d0a613d66696e6765727072696e743a7368612d3235362041413a42420d0a1801",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "direct",
+          "toLeaf": 0,
+          "offer": true,
+          "sdp": "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=fingerprint:sha-256 AA:BB\r\n"
+        }
+      }
+    },
+    {
+      "id": "encode-direct-answer",
+      "kind": "call",
+      "call": "encode",
+      "why": "Canonical protobuf: version and call id always, proto3 defaults omitted in the body.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "direct",
+        "toLeaf": 7,
+        "offer": false,
+        "sdp": "v=0\r\no=- 3 4 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
+      },
+      "expect": {
+        "bytesHex": "0801121000112233445566778899aabbccddeeff6a2f0807122b763d300d0a6f3d2d2033203420494e20495034203132372e302e302e310d0a733d2d0d0a743d3020300d0a"
+      }
+    },
+    {
+      "id": "decode-direct-answer",
+      "kind": "call",
+      "call": "decode",
+      "why": "The same bytes read back to the same signal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff6a2f0807122b763d300d0a6f3d2d2033203420494e20495034203132372e302e302e310d0a733d2d0d0a743d3020300d0a",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "direct",
+          "toLeaf": 7,
+          "offer": false,
+          "sdp": "v=0\r\no=- 3 4 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
+        }
+      }
+    },
+    {
+      "id": "encode-unknown-refused",
+      "kind": "call",
+      "call": "encode",
+      "why": "An unknown signal has nothing to say; only a decoder produces one.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "unknown"
+      },
+      "expectError": "cannot be encoded"
+    },
+    {
+      "id": "encode-short-call-id-refused",
+      "kind": "call",
+      "call": "encode",
+      "why": "A call id is 128 random bits.",
+      "signal": {
+        "version": 1,
+        "callId": "0011",
+        "type": "answer"
+      },
+      "expectError": "a call id is 16 bytes"
+    },
+    {
+      "id": "encode-long-reaction-refused",
+      "kind": "call",
+      "call": "encode",
+      "why": "A reaction is an emoji, not a message.",
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "react",
+        "emoji": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "expectError": "at most 64 bytes"
+    },
+    {
+      "id": "decode-unknown-trailing-fields",
+      "kind": "call",
+      "call": "decode",
+      "why": "Unknown varint, fixed32 and fixed64 fields at the top level are skipped.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff220098060595060102030489060000000000000000",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "answer"
+        }
+      }
+    },
+    {
+      "id": "decode-unknown-field-inside-a-body",
+      "kind": "call",
+      "call": "decode",
+      "why": "A newer build's field inside a known body is skipped.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a0d08014a07776879206e6f74504d",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "declined"
+        }
+      }
+    },
+    {
+      "id": "decode-unknown-body-type",
+      "kind": "call",
+      "call": "decode",
+      "why": "A message type this build does not know is Unknown, at whatever version: ignored, not an error.",
+      "bytesHex": "0802121000112233445566778899aabbccddeeffc202020801",
+      "expect": {
+        "signal": {
+          "version": 2,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "unknown"
+        }
+      }
+    },
+    {
+      "id": "decode-no-body",
+      "kind": "call",
+      "call": "decode",
+      "why": "Version and call id with no body: Unknown.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "unknown"
+        }
+      }
+    },
+    {
+      "id": "decode-unknown-media-is-audio",
+      "kind": "call",
+      "call": "decode",
+      "why": "An unknown media value reads as audio.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff1a0408091001",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "offer",
+          "media": "audio",
+          "ring": true,
+          "createdAtMs": 0
+        }
+      }
+    },
+    {
+      "id": "decode-unknown-reason-is-normal",
+      "kind": "call",
+      "call": "decode",
+      "why": "An unknown hangup reason reads as normal.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff2a02082a",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "hangup",
+          "reason": "normal"
+        }
+      }
+    },
+    {
+      "id": "decode-fields-out-of-order",
+      "kind": "call",
+      "call": "decode",
+      "why": "The body may come before the call id and version; field order is not meaning.",
+      "bytesHex": "2200121000112233445566778899aabbccddeeff0801",
+      "expect": {
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "answer"
+        }
+      }
+    },
+    {
+      "id": "decode-empty",
+      "kind": "call",
+      "call": "decode",
+      "why": "Nothing is not a call signal.",
+      "bytesHex": "",
+      "expectError": "carries no version"
+    },
+    {
+      "id": "decode-direct-without-sdp",
+      "kind": "call",
+      "call": "decode",
+      "why": "A direct signal with no session description says nothing a device could connect with.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff6a0408021801",
+      "expectError": "carries an SDP"
+    },
+    {
+      "id": "decode-offer-created-at-overflow",
+      "kind": "call",
+      "call": "decode",
+      "why": "An Offer stamped past 2^53 - 1 ms: a member's chosen value must not overflow any client's age arithmetic.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff1a0b0802188080808080808010",
+      "expectError": "outside the range every client can age"
+    },
+    {
+      "id": "decode-offer-created-at-negative",
+      "kind": "call",
+      "call": "decode",
+      "why": "An Offer stamped before 1970 (int64 -1, ten bytes of varint).",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff1a0d080218ffffffffffffffffff01",
+      "expectError": "outside the range every client can age"
+    },
+    {
+      "id": "decode-no-call-id",
+      "kind": "call",
+      "call": "decode",
+      "why": "A version alone.",
+      "bytesHex": "0801",
+      "expectError": "carries a call id"
+    },
+    {
+      "id": "decode-short-call-id",
+      "kind": "call",
+      "call": "decode",
+      "why": "A call id of 15 bytes.",
+      "bytesHex": "0801120f00112233445566778899aabbccddee",
+      "expectError": "a call id is 16 bytes"
+    },
+    {
+      "id": "decode-truncated-varint",
+      "kind": "call",
+      "call": "decode",
+      "why": "Ends inside a varint.",
+      "bytesHex": "08",
+      "expectError": "inside a varint"
+    },
+    {
+      "id": "decode-length-past-end",
+      "kind": "call",
+      "call": "decode",
+      "why": "A length running past the buffer.",
+      "bytesHex": "0801122800112233445566778899aabbccddeeff",
+      "expectError": "runs past its end"
+    },
+    {
+      "id": "decode-group-wire-type",
+      "kind": "call",
+      "call": "decode",
+      "why": "Wire type 3 (start group) is not proto3.",
+      "bytesHex": "080113",
+      "expectError": "wire type 3"
+    },
+    {
+      "id": "decode-wrong-wire-type-for-version",
+      "kind": "call",
+      "call": "decode",
+      "why": "A known field with the wrong wire type is malformed, not unknown.",
+      "bytesHex": "0a0101121000112233445566778899aabbccddeeff",
+      "expectError": "not a varint"
+    },
+    {
+      "id": "decode-not-utf8",
+      "kind": "call",
+      "call": "decode",
+      "why": "A participant id that is not UTF-8.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff3a040a02fffe",
+      "expectError": "not UTF-8"
+    },
+    {
+      "id": "decode-joined-short-media-key",
+      "kind": "call",
+      "call": "decode",
+      "why": "A Joined's call public key is 32 bytes or absent.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff32240a01702a1f00000000000000000000000000000000000000000000000000000000000000",
+      "expectError": "media key is 32 bytes or absent"
+    },
+    {
+      "id": "decode-media-key-short-enc",
+      "kind": "call",
+      "call": "decode",
+      "why": "A grant's enc is an X25519 public key, 32 bytes.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff722808011a24121f000000000000000000000000000000000000000000000000000000000000001a0178",
+      "expectError": "enc is 32 bytes"
+    },
+    {
+      "id": "decode-media-key-empty-ciphertext",
+      "kind": "call",
+      "call": "decode",
+      "why": "A grant with nothing sealed in it grants nothing.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff722608011a2212200000000000000000000000000000000000000000000000000000000000000000",
+      "expectError": "carries a ciphertext"
+    },
+    {
+      "id": "decode-media-key-too-many-grants",
+      "kind": "call",
+      "call": "decode",
+      "why": "At most 24 grants in one MediaKey; a sender with more recipients sends several.",
+      "bytesHex": "0801121000112233445566778899aabbccddeeff72cf071a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a01781a25122000000000000000000000000000000000000000000000000000000000000000001a0178",
+      "expectError": "at most 24 grants"
+    },
+    {
+      "id": "decode-sealed-payload-json",
+      "kind": "call",
+      "call": "decode",
+      "why": "A chat message's JSON payload swapped into a call envelope does not read as a call.",
+      "bytesHex": "7b2276223a312c2274657874223a226869227d",
+      "expectError": "wire type 3"
+    },
+    {
+      "id": "seal-live-joined",
+      "kind": "call",
+      "call": "sealLive",
+      "why": "0x02 || nonce || AES-256-GCM(live key, nonce, aad 0x02, u32be sender leaf || u64be sent-at ms || u16be len || signal || zeros to 128).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "nonceHex": "000000000000000000000000",
+      "senderLeaf": 3,
+      "sentAtMs": 1789516800123,
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "joined",
+        "participantId": "p-7f3a",
+        "sessionId": "cf-session-1",
+        "trackNames": [
+          "audio-0",
+          "video-0",
+          ""
+        ],
+        "leafIndex": 3
+      },
+      "expect": {
+        "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba72876697695128e3d24d1f3b4071aedae2a4acdc46f3d9794216c8716f0f7781733f5a5c48914fa57280d945a106bccb5363fe5949183dbe126aa20de53cd2e2dd76217913303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c968751fbd9a42cca5ef30b7d05721bb340"
+      }
+    },
+    {
+      "id": "open-live-joined",
+      "kind": "call",
+      "call": "openLive",
+      "why": "The frame opens to its stamp and its signal.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba72876697695128e3d24d1f3b4071aedae2a4acdc46f3d9794216c8716f0f7781733f5a5c48914fa57280d945a106bccb5363fe5949183dbe126aa20de53cd2e2dd76217913303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c968751fbd9a42cca5ef30b7d05721bb340",
+      "expect": {
+        "senderLeaf": 3,
+        "sentAtMs": 1789516800123,
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "joined",
+          "participantId": "p-7f3a",
+          "sessionId": "cf-session-1",
+          "trackNames": [
+            "audio-0",
+            "video-0",
+            ""
+          ],
+          "leafIndex": 3
+        }
+      }
+    },
+    {
+      "id": "seal-live-media",
+      "kind": "call",
+      "call": "sealLive",
+      "why": "0x02 || nonce || AES-256-GCM(live key, nonce, aad 0x02, u32be sender leaf || u64be sent-at ms || u16be len || signal || zeros to 128).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "nonceHex": "010101010101010101010101",
+      "senderLeaf": 3,
+      "sentAtMs": 1789516800123,
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "media",
+        "audioOn": true,
+        "videoOn": false,
+        "presenting": true
+      },
+      "expect": {
+        "innerHex": "02010101010101010101010101489123a34f502f663d7abc77f8b13f5eefc41fb058029c181133039ed171824f03f6a56506837e3fffc0d72298b98f85e80f5cfc6251e9fd8492054a3bc0abcaafa8d6c89b68be90543048e9501643d1a931b30bf1b864ab645051bc288a0c7651366aa0f2e090fb96a5b55767ed29a090985829e2732dee5b4ec713104eafd914d3e1da23d348547dfb45fce123dbf7"
+      }
+    },
+    {
+      "id": "open-live-media-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "An in-call control must name its sender: it travels only on the MLS lane, and a live frame carrying one is refused.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "02010101010101010101010101489123a34f502f663d7abc77f8b13f5eefc41fb058029c181133039ed171824f03f6a56506837e3fffc0d72298b98f85e80f5cfc6251e9fd8492054a3bc0abcaafa8d6c89b68be90543048e9501643d1a931b30bf1b864ab645051bc288a0c7651366aa0f2e090fb96a5b55767ed29a090985829e2732dee5b4ec713104eafd914d3e1da23d348547dfb45fce123dbf7",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "seal-live-react",
+      "kind": "call",
+      "call": "sealLive",
+      "why": "0x02 || nonce || AES-256-GCM(live key, nonce, aad 0x02, u32be sender leaf || u64be sent-at ms || u16be len || signal || zeros to 128).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "nonceHex": "020202020202020202020202",
+      "senderLeaf": 3,
+      "sentAtMs": 1789516800123,
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "react",
+        "emoji": "🎉"
+      },
+      "expect": {
+        "innerHex": "02020202020202020202020202df57573b5b80b4084e922e16957f925a33f297a17b4ac254ff37eccef58b3e4a7519a5c2efb3fc9a57435b5b70aa8aa2a81cd335ba01e3f5f1fdb4ec5a36d0a7cd9b8b13d43df3b527dc02d29a0ef434d3730a4da46a4b14ab6f9944a4e52c12c30b8ed3f05e92c0e337f3c0f012bfe163340d3291d1da43dbd4727b64e2d89ec66a21b07665aabee457e995aedb5ef5"
+      }
+    },
+    {
+      "id": "open-live-react-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "An in-call control must name its sender: it travels only on the MLS lane, and a live frame carrying one is refused.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "02020202020202020202020202df57573b5b80b4084e922e16957f925a33f297a17b4ac254ff37eccef58b3e4a7519a5c2efb3fc9a57435b5b70aa8aa2a81cd335ba01e3f5f1fdb4ec5a36d0a7cd9b8b13d43df3b527dc02d29a0ef434d3730a4da46a4b14ab6f9944a4e52c12c30b8ed3f05e92c0e337f3c0f012bfe163340d3291d1da43dbd4727b64e2d89ec66a21b07665aabee457e995aedb5ef5",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "seal-live-raise-hand",
+      "kind": "call",
+      "call": "sealLive",
+      "why": "0x02 || nonce || AES-256-GCM(live key, nonce, aad 0x02, u32be sender leaf || u64be sent-at ms || u16be len || signal || zeros to 128).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "nonceHex": "030303030303030303030303",
+      "senderLeaf": 3,
+      "sentAtMs": 1789516800123,
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "raiseHand",
+        "up": true
+      },
+      "expect": {
+        "innerHex": "020303030303030303030303030d73e595ac836948153c78af022424e709c9e46e60dc9da88cc9b6cadae83e73f8e700c545dc0382f0274f9dbba1355f95bdb296dd69ad8208585921ed0a9533f66c73a1a13db65a38ec664d741ffc550f8889523e31c689123bd9eacb0f1606b0b2ab71267d46ea339a576e54bedcd60914cadb273ee415513340c3e2323cf6dc5a5e2ea4daee69ef37585d83cfc834"
+      }
+    },
+    {
+      "id": "open-live-raise-hand-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "An in-call control must name its sender: it travels only on the MLS lane, and a live frame carrying one is refused.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "020303030303030303030303030d73e595ac836948153c78af022424e709c9e46e60dc9da88cc9b6cadae83e73f8e700c545dc0382f0274f9dbba1355f95bdb296dd69ad8208585921ed0a9533f66c73a1a13db65a38ec664d741ffc550f8889523e31c689123bd9eacb0f1606b0b2ab71267d46ea339a576e54bedcd60914cadb273ee415513340c3e2323cf6dc5a5e2ea4daee69ef37585d83cfc834",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "seal-live-left",
+      "kind": "call",
+      "call": "sealLive",
+      "why": "0x02 || nonce || AES-256-GCM(live key, nonce, aad 0x02, u32be sender leaf || u64be sent-at ms || u16be len || signal || zeros to 128).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "nonceHex": "040404040404040404040404",
+      "senderLeaf": 3,
+      "sentAtMs": 1789516800123,
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "left",
+        "participantId": "p-7f3a"
+      },
+      "expect": {
+        "innerHex": "0204040404040404040404040466d45703e812f09a12cbf7c4dbd42d90c04059e2c6b664052a98c7977c707741c054e97bb3fc57166e3fbdad88cc698e9168581b865645013614fb9df65ccef72127172012cd788a6f72ae18543bf352f7633a145fdb846c2ab846fbf9b3a200c35b7ba365bc144fbba86b08795d27769a82d41840acfd39d93ed788cc56ed5baedbc3290ab166eea1898112addce04c"
+      }
+    },
+    {
+      "id": "open-live-left",
+      "kind": "call",
+      "call": "openLive",
+      "why": "The frame opens to its stamp and its signal.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0204040404040404040404040466d45703e812f09a12cbf7c4dbd42d90c04059e2c6b664052a98c7977c707741c054e97bb3fc57166e3fbdad88cc698e9168581b865645013614fb9df65ccef72127172012cd788a6f72ae18543bf352f7633a145fdb846c2ab846fbf9b3a200c35b7ba365bc144fbba86b08795d27769a82d41840acfd39d93ed788cc56ed5baedbc3290ab166eea1898112addce04c",
+      "expect": {
+        "senderLeaf": 3,
+        "sentAtMs": 1789516800123,
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "left",
+          "participantId": "p-7f3a"
+        }
+      }
+    },
+    {
+      "id": "seal-live-remote-mute",
+      "kind": "call",
+      "call": "sealLive",
+      "why": "0x02 || nonce || AES-256-GCM(live key, nonce, aad 0x02, u32be sender leaf || u64be sent-at ms || u16be len || signal || zeros to 128).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "nonceHex": "050505050505050505050505",
+      "senderLeaf": 3,
+      "sentAtMs": 1789516800123,
+      "signal": {
+        "version": 1,
+        "callId": "00112233445566778899aabbccddeeff",
+        "type": "remoteMute",
+        "target": "p-7f3a"
+      },
+      "expect": {
+        "innerHex": "02050505050505050505050505a91c5f64c73d2e8cf26c2c312e79b8aae6fb035e8d138ae8d247f8f0c765fe777e602125da2c3f5db10d365e1be1afb02400b8cfc5bc91ab5208fb02426f96abbe0ff57f22164f9d9b658b7bed702863f5c450471670cc1ae442370e4484e1c6b517d3c66e543eddbfc9332d31a14697894763c9040149c65c08c593a52546401535057f4f543a94d023822dd83345ac"
+      }
+    },
+    {
+      "id": "open-live-remote-mute-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "An in-call control must name its sender: it travels only on the MLS lane, and a live frame carrying one is refused.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "02050505050505050505050505a91c5f64c73d2e8cf26c2c312e79b8aae6fb035e8d138ae8d247f8f0c765fe777e602125da2c3f5db10d365e1be1afb02400b8cfc5bc91ab5208fb02426f96abbe0ff57f22164f9d9b658b7bed702863f5c450471670cc1ae442370e4484e1c6b517d3c66e543eddbfc9332d31a14697894763c9040149c65c08c593a52546401535057f4f543a94d023822dd83345ac",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "open-live-stamp-edges",
+      "kind": "call",
+      "call": "openLive",
+      "why": "The leaf is a u32 and the stamp a u64, both big-endian.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "02000000000000000000000000ce079bb866dd6b509b1ab423282a697695128e3d24d1f3b4071aedae2a4acdc46f3d9fb0216c8716f0f7781721f9c6a2a4679f245b64fb343d5ad6b2574a81fdfeaeebfb21dc49ba36a2031dcd6237923303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c96518bae936994a6a46701507acb6ff4f9",
+      "expect": {
+        "senderLeaf": 4294967295,
+        "sentAtMs": 9007199254740991,
+        "signal": {
+          "version": 1,
+          "callId": "00112233445566778899aabbccddeeff",
+          "type": "left",
+          "participantId": "p-7f3a"
+        }
+      }
+    },
+    {
+      "id": "open-live-wrong-key",
+      "kind": "call",
+      "call": "openLive",
+      "why": "A device outside the epoch derives another live key and opens nothing.",
+      "liveKeyHex": "acea40cf7595a6a6b313ace74bba5697924b52755aef6a219672f46be8ccb04c",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba72876697695128e3d24d1f3b4071aedae2a4acdc46f3d9794216c8716f0f7781733f5a5c48914fa57280d945a106bccb5363fe5949183dbe126aa20de53cd2e2dd76217913303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c968751fbd9a42cca5ef30b7d05721bb340",
+      "expectError": "did not open"
+    },
+    {
+      "id": "open-live-mls-lane-byte",
+      "kind": "call",
+      "call": "openLive",
+      "why": "Lane 1 is an MLS message, not a live frame.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0100000000000000000000000031f8644466c2950fc3662ba72876697695128e3d24d1f3b4071aedae2a4acdc46f3d9794216c8716f0f7781733f5a5c48914fa57280d945a106bccb5363fe5949183dbe126aa20de53cd2e2dd76217913303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c968751fbd9a42cca5ef30b7d05721bb340",
+      "expectError": "not a live frame"
+    },
+    {
+      "id": "open-live-hangup-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "An unauthenticated frame may not hang up: Hangup travels only on the MLS lane.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba7282c697695128e3d24d1f3b4071aedae2a4acdc46f3d8fba2369f73bc7914b7621f9c6a2a4679f245b64fb343d5ad6b2574a81fdfeaeebfb21dc49ba36a2031dcd6237923303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c963598c94f6432fc8b3f15996e3883d8e6",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "open-live-remove-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "Remove is an admin's act and needs a signed sender.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba7282a697695128e3d24d1f3b4071aedae2a4acdc46f3dffb0216c8716f0f7781721f9c6a2a4679f245b64fb343d5ad6b2574a81fdfeaeebfb21dc49ba36a2031dcd6237923303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c9642c09c5692858b7ce4776ff98b514881",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "open-live-offer-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "An Offer rings; an unattributed frame may not ring anyone (threat model N6).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba72815697695128e3d24d1f3b4071aedae2a4acdc46f3dbfb3236be73adf118bfb9d73f2a2a4679f245b64fb343d5ad6b2574a81fdfeaeebfb21dc49ba36a2031dcd6237923303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c96e361b7a72b4d4b23e6bd9d7e2f3fd613",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "open-live-answer-refused",
+      "kind": "call",
+      "call": "openLive",
+      "why": "An Answer stops a ring and must name who answered (threat model N6).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba72822697695128e3d24d1f3b4071aedae2a4acdc46f3d87b82b6af73bc7914b7621f9c6a2a4679f245b64fb343d5ad6b2574a81fdfeaeebfb21dc49ba36a2031dcd6237923303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c962c07926f667a0029cc83271c920bea17",
+      "expectError": "must come on the MLS lane"
+    },
+    {
+      "id": "open-live-flipped-bit",
+      "kind": "call",
+      "call": "openLive",
+      "why": "One flipped ciphertext bit fails the tag (threat model N5).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0200000000000000000000000031f8644466c2950ec3662ba72876697695128e3d24d1f3b4071aedae2a4acdc46f3d9794216c8716f0f7781733f5a5c48914fa57280d945a106bccb5363fe5949183dbe126aa20de53cd2e2dd76217913303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c968751fbd9a42cca5ef30b7d05721bb340",
+      "expectError": "did not open"
+    },
+    {
+      "id": "open-live-truncated",
+      "kind": "call",
+      "call": "openLive",
+      "why": "A frame cut inside its nonce is not a frame (threat model N5).",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "020000000000000000",
+      "expectError": "carries a nonce"
+    },
+    {
+      "id": "open-live-nonzero-padding",
+      "kind": "call",
+      "call": "openLive",
+      "why": "Padding is zeros; anything else is a frame this codec did not write.",
+      "liveKeyHex": "c133a6239aff1ba30231ca78fb592914a9fc60f312052f6e5e2f8addda5a937d",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba7282a697695128e3d24d1f3b4071aedae2a4acdc46f3d9fb0216c8716f0f7781720f8c7a3a5669e255a65fa353c5bd7b3564b80fcffafeafa20dd48bb37a3021ccc6336933202f5401767858a75498acb0774c37650269ab273cafd639dbb0d2c0ac2c3c22242019772015fb9096786eac7284d97d2da3a90fbdfdb313834256386d6445f",
+      "expectError": "padding is not zero"
+    },
+    {
+      "id": "replay-the-same-left-twice",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "The server replays a recorded Left: the second copy is refused (the D3 attack).",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "duplicate"
+        ]
+      }
+    },
+    {
+      "id": "replay-increasing-stamps-pass",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "A sender's stamps strictly increase; each one moves the mark.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800001,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516810000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516810001,
+          "nowMs": 1789516800000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "accepted",
+          "accepted",
+          "accepted"
+        ]
+      }
+    },
+    {
+      "id": "replay-reordered-sends",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "Two sends that crossed on the way are both accepted, and each only once.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800010,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800004,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800004,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800010,
+          "nowMs": 1789516800000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "accepted",
+          "duplicate",
+          "duplicate"
+        ]
+      }
+    },
+    {
+      "id": "replay-claimed-leaf-cannot-silence-its-owner",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "A member claims leaf 3 with a stamp 120 s ahead: it takes that stamp only, and the leaf's own later frames are accepted.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516920000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516810000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516920000,
+          "nowMs": 1789516800000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "accepted",
+          "accepted",
+          "duplicate"
+        ]
+      }
+    },
+    {
+      "id": "replay-forgotten-once-stale",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "A stamp is remembered until the clock bound refuses it, and is refused as stale after.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516920000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516920001
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "duplicate",
+          "stale"
+        ]
+      }
+    },
+    {
+      "id": "replay-each-leaf-its-own-mark",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "One sender's mark says nothing about another's.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 1,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 2,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 1,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 2,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "accepted",
+          "duplicate",
+          "duplicate"
+        ]
+      }
+    },
+    {
+      "id": "replay-each-call-its-own-mark",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "The same stamp in another call is another frame.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000,
+          "callId": "ffeeddccbbaa99887766554433221100"
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000,
+          "callId": "ffeeddccbbaa99887766554433221100"
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "accepted",
+          "duplicate"
+        ]
+      }
+    },
+    {
+      "id": "replay-stale-to-a-fresh-receiver",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "A receiver with no mark (it just joined, or restarted) still refuses a recording more than 120 s old; exactly 120 s is accepted.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516920001
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516920000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "stale",
+          "accepted"
+        ]
+      }
+    },
+    {
+      "id": "replay-future-stamp",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "A stamp more than 120 s ahead of the receiver's clock is refused, so no stamp can push a mark further ahead than that; exactly 120 s is accepted.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516920001,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516920000,
+          "nowMs": 1789516800000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "future",
+          "accepted"
+        ]
+      }
+    },
+    {
+      "id": "replay-new-epoch-starts-afresh",
+      "kind": "call",
+      "call": "liveReplay",
+      "why": "A newer epoch's leaf may be another device with another clock: its mark starts again, and the older epoch's frames are refused after it.",
+      "steps": [
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516801000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 6,
+          "leaf": 3,
+          "sentAtMs": 1789516800000,
+          "nowMs": 1789516800000
+        },
+        {
+          "epoch": 5,
+          "leaf": 3,
+          "sentAtMs": 1789516802000,
+          "nowMs": 1789516800000
+        }
+      ],
+      "expect": {
+        "verdicts": [
+          "accepted",
+          "accepted",
+          "oldEpoch"
+        ]
+      }
+    },
+    {
+      "id": "envelope-mls-lane",
+      "kind": "call",
+      "call": "envelope",
+      "why": "ENVELOPE_KIND_CALL (6) in the envelope every sealed byte rides; kinds 1-5 unchanged.",
+      "groupId": "11111111-1111-4111-8111-111111111111",
+      "innerHex": "0100017374616e642d696e204d4c53206d657373616765",
+      "nonceHex": "000102030405060708090a0b",
+      "expect": {
+        "envelopeHex": "02000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e3dcd644fd74568e8bc260be36bddedbecadbe7e33bc6a887e3f8226c4ce7e8e7d6844b949b87857ce4f215e53f1fc33e7e79604ffd0e48cbb1c98fb62d94ca1929eeaa7eea0fbd2ec4d0955daf0a18799ad807a6bcf05e9bc02c40ae63c96094fbe6cc11ef9be5b54f75916eb455b772fe9ad700c233eb7e9a54e07eeabb7729791da958cef19687f1ff390bdee6ce76ec2581fa0b2ccc64568faf6e9d56d7ff9aa86bac0d5bd7b22ae449d8fc35b52f453149c61766fbfd5a9aace3f4716d5f7505dc85005d1954620e73d29dca25bb7978f01976599e2072b4a030ddbc2aaacdaa36aeb3922f3d47cb2b17aac4637fd2c54e15b708e227d2d16678bf661d34bac9f9ca44ba11c1582b32664c7ceef96022e54e8d7dbecec220d4374a4b81da58913c8fe9ef10239437f29e3c0e8b1db7a45efa6e0d0ac407cc4e79a4a8588098f58c5f15d8e0c1b98820f8a74cacb08e7d25682ccbe7e88cbf8a7bf885a0e0065a194bf20796a74a52c373c9d87628524c17d507d5776ea54ccb8d5ca23c95135c0682576f93134db751f951d5b7d823087aa31f85d8aebbd2e760a246ca2b9a336f917ed3257b6eb370c7bc7d889aea5dcee77fa0fbc40d10c8021128cd420090bc513a2b7957f995315cb8493fd8a436d581995bb722a7177036754c36109b490",
+        "kind": 6,
+        "innerHex": "0100017374616e642d696e204d4c53206d657373616765"
+      }
+    },
+    {
+      "id": "envelope-live-lane",
+      "kind": "call",
+      "call": "envelope",
+      "why": "ENVELOPE_KIND_CALL (6) in the envelope every sealed byte rides; kinds 1-5 unchanged.",
+      "groupId": "11111111-1111-4111-8111-111111111111",
+      "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba72876697695128e3d24d1f3b4071aedae2a4acdc46f3d9794216c8716f0f7781733f5a5c48914fa57280d945a106bccb5363fe5949183dbe126aa20de53cd2e2dd76217913303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c968751fbd9a42cca5ef30b7d05721bb340",
+      "nonceHex": "ffffffffffffffffffffffff",
+      "expect": {
+        "envelopeHex": "02ffffffffffffffffffffffffae8aeb0995457bb116a384db9741e146dc147b93bde929c8ff36ed00230f5fade4e92ff79b7b0cbb461089dd4b3222f579c97864f270eaad160e3809b7056d4da282a665f60605890c8d44f83623e5b43fb0e6ca5d46095dd5050565719b30aacc18cbb457ef440cfa3cfb066ef174c7fbebd146539a954e231617a5ee7852109d27a55c72b86499863b894607f3a78bcdae4c01cc6f1426d8d17588e73d7f01d1a75d474a6cef3cac7b19f8f9a8087824ad56706d5b69b423a32954f85109aae407dc986ee0f62623a11b6cb4a819133db6566fb4df4fc3186e3020b8938de3cbc97ca0541de1863e40a4b4a19f717222555e9854d0c533b70ad2de80022a7acc9a1e01ef37fabf0781c2ec542ac12a1fb7fe282abd436731462bd1d2a1e1db55552a9f383a6c1dd231bf71c657fec990138c9ab4be84b09c997b9878134b8e68b696475868363fa4cd4b79892e8604eeb45d9e16b87a2effacbd704fa94a1814e0c03680724c8a6dd30320fb28dbc12bb7885d5544b6807ce58c81fff8474efb61309e2dbd571011312c9b908be5de7bf128db1af9e9d4b929c44319718fbc70ad74fd175030303888ad28148a1ee8e15a9d8b28634749084a50b01e1318ac8a8cc8a310936e030b03a601d9ce8264a189698bb2c645e36aed9eb7e7b9d67f2d7985ee2638418eb5cc9800232db028027daa",
+        "kind": 6,
+        "innerHex": "0200000000000000000000000031f8644466c2950fc3662ba72876697695128e3d24d1f3b4071aedae2a4acdc46f3d9794216c8716f0f7781733f5a5c48914fa57280d945a106bccb5363fe5949183dbe126aa20de53cd2e2dd76217913303f4411666848b74488bca0675c27751279bb372cbfc629cba0c2d0bc3c2c32343009673005eb8086687ebc6294c968751fbd9a42cca5ef30b7d05721bb340"
+      }
+    },
+    {
+      "id": "ring-1to1-offer-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "An idle device rings for a fresh 1:1 offer and arms the 60 s ring timer.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-null-state-is-idle",
+      "kind": "call",
+      "call": "ring",
+      "why": "A client with no saved state passes null.",
+      "state": null,
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-group-offer-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "A group of five rings.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 5,
+        "oneToOne": false,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": false
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-group-of-16-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "The cap is inclusive: 16 people ring.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 16,
+        "oneToOne": false,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": false
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-group-of-17-is-a-notice",
+      "kind": "call",
+      "call": "ring",
+      "why": "Above 16 an offer is a notice even if it asks to ring.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 17,
+        "oneToOne": false,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "notice",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-non-ringing-offer-is-a-notice",
+      "kind": "call",
+      "call": "ring",
+      "why": "ring=false is a non-ringing group-call join notice.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": false,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 5,
+        "oneToOne": false,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "notice",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-1to1-always-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "A 1:1 offer rings whatever its ring bit says.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": false,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-own-device-offer-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "My own other device's call never rings me.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "ring-blocked-caller-silent",
+      "kind": "call",
+      "call": "ring",
+      "why": "A blocked caller rings nothing and hears nothing back.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "blocked"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "ring-message-request-1to1-needs-permission",
+      "kind": "call",
+      "call": "ring",
+      "why": "An unaccepted message request: the 1:1 caller is told need_permission; nothing rings.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "needsPermission"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "need_permission"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-message-request-group-silent-missed",
+      "kind": "call",
+      "call": "ring",
+      "why": "In a group the caller is not told; the device records a miss.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 5,
+        "oneToOne": false,
+        "gate": "needsPermission"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-offer-at-max-age-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "Exactly 60 s old still rings (the maximum age is inclusive).",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 60000,
+        "createdAtMs": 1789516740000,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-stale-offer-missed",
+      "kind": "call",
+      "call": "ring",
+      "why": "Older than 60 s: recorded missed, nothing rings.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 60001,
+        "createdAtMs": 1789516739999,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-stale-notice-nothing",
+      "kind": "call",
+      "call": "ring",
+      "why": "A stale non-ringing notice is nothing at all.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": false,
+        "ageMs": 600000,
+        "createdAtMs": 1789516200000,
+        "nowMs": 1789516800000,
+        "memberCount": 5,
+        "oneToOne": false,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "ring-offer-dated-ahead-within-skew-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "The caller's clock 120 s ahead of this device's still rings (the skew is inclusive).",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 0,
+        "createdAtMs": 1789516920000,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-offer-dated-past-skew-missed",
+      "kind": "call",
+      "call": "ring",
+      "why": "Dated more than 120 s ahead of this device's clock: recorded missed, nothing rings.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 0,
+        "createdAtMs": 1789516920001,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-offer-dated-far-ahead-missed",
+      "kind": "call",
+      "call": "ring",
+      "why": "Dated as far ahead as the codec allows, so that no clock would ever call it stale: missed.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 0,
+        "createdAtMs": 9007199254740991,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-offer-stamp-at-max-age-plus-skew-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "Fresh by the server's clock, and 180 s old by the caller's: still rings.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1000,
+        "createdAtMs": 1789516620000,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-offer-held-by-the-server-missed",
+      "kind": "call",
+      "call": "ring",
+      "why": "The server says it took the offer a second ago, but the caller made it more than 60 s plus the 120 s skew ago: recorded missed, nothing rings.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1000,
+        "createdAtMs": 1789516619999,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-offer-age-from-the-future-missed",
+      "kind": "call",
+      "call": "ring",
+      "why": "An age more than the skew below zero is no clock's: recorded missed.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": -120001,
+        "createdAtMs": 1789516800000,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-redelivered-offer-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "The same offer twice changes nothing.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "busy-while-ringing-1to1",
+      "kind": "call",
+      "call": "ring",
+      "why": "One call at a time: a second 1:1 offer gets one busy, addressed to the conversation like a message; my other devices read it as busy elsewhere.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-bo-fay",
+        "sender": "bo",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000b",
+              "type": "hangup",
+              "reason": "busy"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000b",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "busy-in-group-call-group-ring",
+      "kind": "call",
+      "call": "ring",
+      "why": "A group ring while in a call: my other devices stop (busy locally); the group caller is not told.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "group-other",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 5,
+        "oneToOne": false,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "oneToOne": false
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "ownDevices",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000b",
+              "type": "hangup",
+              "reason": "busy_elsewhere"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000b",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "busy-while-calling-someone-else",
+      "kind": "call",
+      "call": "ring",
+      "why": "Calling Bo while Ava calls: busy to Ava.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-bo-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "outgoing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-bo-fay",
+          "media": "video"
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000b",
+              "type": "hangup",
+              "reason": "busy"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000b",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-caller-cancels",
+      "kind": "call",
+      "call": "ring",
+      "why": "Any hangup from the caller stops the ring: a missed call.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "normal"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-other-member-hangup-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "Another member's hangup is not the caller's.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "bo",
+        "fromSelf": false,
+        "reason": "declined"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": false
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "ringing-accepted-elsewhere",
+      "kind": "call",
+      "call": "ring",
+      "why": "My other device says accepted_elsewhere: stop ringing and record it.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true,
+        "reason": "accepted_elsewhere"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "answeredElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-declined-elsewhere",
+      "kind": "call",
+      "call": "ring",
+      "why": "My other device says declined_elsewhere: stop ringing and record it.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true,
+        "reason": "declined_elsewhere"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "declinedElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-busy-elsewhere",
+      "kind": "call",
+      "call": "ring",
+      "why": "My other device says busy_elsewhere: stop ringing and record it.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true,
+        "reason": "busy_elsewhere"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "busyElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-own-1to1-declined",
+      "kind": "call",
+      "call": "ring",
+      "why": "My other device's 1:1 declined, which goes to the whole conversation: stop ringing and record it.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true,
+        "reason": "declined"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "declinedElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-own-1to1-busy",
+      "kind": "call",
+      "call": "ring",
+      "why": "My other device's 1:1 busy, which goes to the whole conversation: stop ringing and record it.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true,
+        "reason": "busy"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "busyElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-own-normal-hangup-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "A plain hangup from my own device is not an *_elsewhere.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true,
+        "reason": "normal"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "ringing-own-answer-is-answered-elsewhere",
+      "kind": "call",
+      "call": "ring",
+      "why": "An Answer from my own other device also stops the ring.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "answer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "answeredElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-someone-elses-answer-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "Another member answering a group ring does not stop mine.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "answer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "bo",
+        "fromSelf": false
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": false
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "ringing-timeout",
+      "kind": "call",
+      "call": "ring",
+      "why": "60 s of ringing: missed.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "timeout",
+        "callId": "0000000000000000000000000000000a"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ringing-stale-timeout-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "A timer for another call changes nothing.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "timeout",
+        "callId": "0000000000000000000000000000000b"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "accept-1to1",
+      "kind": "call",
+      "call": "ring",
+      "why": "Accept: join and send one answer to the conversation, addressed like a message; my other devices read it as answered elsewhere.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "accept"
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "join",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "answer"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "accept-group",
+      "kind": "call",
+      "call": "ring",
+      "why": "A group ring's caller is not answered; my other devices still stop.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "accept"
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "oneToOne": false
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "join",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "ownDevices",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "accepted_elsewhere"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "decline-1to1",
+      "kind": "call",
+      "call": "ring",
+      "why": "Decline: one declined to the conversation, addressed like a message; my other devices read it as declined elsewhere.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "decline"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "declined"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "declined"
+          }
+        ]
+      }
+    },
+    {
+      "id": "decline-group",
+      "kind": "call",
+      "call": "ring",
+      "why": "A group ring's decline goes to my own devices only.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "decline"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "ownDevices",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "declined_elsewhere"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "declined"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hang-up-while-ringing-declines",
+      "kind": "call",
+      "call": "ring",
+      "why": "The red button while ringing is a decline.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangUp"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "stopRinging",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "declined"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "declined"
+          }
+        ]
+      }
+    },
+    {
+      "id": "accept-when-idle-nothing",
+      "kind": "call",
+      "call": "ring",
+      "why": "Nothing is ringing.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "accept"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "place-1to1",
+      "kind": "call",
+      "call": "ring",
+      "why": "Join the room, ring the conversation, wait 60 s for an answer.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "placeCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "memberCount": 2,
+        "oneToOne": true,
+        "nowMs": 1789516800000
+      },
+      "expect": {
+        "state": {
+          "phase": "outgoing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video"
+        },
+        "effects": [
+          {
+            "type": "join",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "offer",
+              "media": "video",
+              "ring": true,
+              "createdAtMs": 1789516800000
+            }
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "place-group",
+      "kind": "call",
+      "call": "ring",
+      "why": "A group caller is in the room at once; nobody's answer is awaited.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "placeCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "memberCount": 10,
+        "oneToOne": false,
+        "nowMs": 1789516800000
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "oneToOne": false,
+          "rang": true
+        },
+        "effects": [
+          {
+            "type": "join",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "offer",
+              "media": "video",
+              "ring": true,
+              "createdAtMs": 1789516800000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "place-group-above-cap-does-not-ring",
+      "kind": "call",
+      "call": "ring",
+      "why": "40 people: the offer says ring=false.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "placeCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "audio",
+        "memberCount": 40,
+        "oneToOne": false,
+        "nowMs": 1789516800000
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "audio",
+          "oneToOne": false
+        },
+        "effects": [
+          {
+            "type": "join",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "offer",
+              "media": "audio",
+              "ring": false,
+              "createdAtMs": 1789516800000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "place-while-in-a-call-refused",
+      "kind": "call",
+      "call": "ring",
+      "why": "One call at a time.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "placeCall",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "memberCount": 2,
+        "oneToOne": true,
+        "nowMs": 1789516800000
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "refused",
+            "callId": "0000000000000000000000000000000b"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outgoing-answered",
+      "kind": "call",
+      "call": "ring",
+      "why": "The other side answered.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "answer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "peerAnswered",
+            "callId": "0000000000000000000000000000000a"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outgoing-own-answer-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "My own device's answer is not the callee's.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "answer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "fay",
+        "fromSelf": true
+      },
+      "expect": {
+        "state": {
+          "phase": "outgoing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "outgoing-remote-busy",
+      "kind": "call",
+      "call": "ring",
+      "why": "The callee says busy: leave and record remoteBusy.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "busy"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "remoteBusy"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outgoing-remote-declined",
+      "kind": "call",
+      "call": "ring",
+      "why": "The callee says declined: leave and record remoteDeclined.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "declined"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "remoteDeclined"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outgoing-remote-need-permission",
+      "kind": "call",
+      "call": "ring",
+      "why": "The callee says need_permission: leave and record needsPermission.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "need_permission"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "needsPermission"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outgoing-answer-from-another-conversation-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "Only the call's own conversation answers it: whoever else learned the call id cannot.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "answer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "mal",
+        "fromSelf": false
+      },
+      "expect": {
+        "state": {
+          "phase": "outgoing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "outgoing-hangup-from-another-conversation-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "Only the call's own conversation declines it.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "mal",
+        "fromSelf": false,
+        "reason": "declined"
+      },
+      "expect": {
+        "state": {
+          "phase": "outgoing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "outgoing-callee-elsewhere-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "A callee's *_elsewhere is for the callee's own devices.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "accepted_elsewhere"
+      },
+      "expect": {
+        "state": {
+          "phase": "outgoing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "outgoing-timeout",
+      "kind": "call",
+      "call": "ring",
+      "why": "No answer in 60 s: cancel the ring with normal, leave.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "timeout",
+        "callId": "0000000000000000000000000000000a"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "normal"
+            }
+          },
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "noAnswer"
+          }
+        ]
+      }
+    },
+    {
+      "id": "outgoing-cancel",
+      "kind": "call",
+      "call": "ring",
+      "why": "Cancelling before an answer.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "hangUp"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "normal"
+            }
+          },
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-call-1to1-remote-hangup",
+      "kind": "call",
+      "call": "ring",
+      "why": "The other side of a 1:1 hung up: the call is over.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "normal"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-call-1to1-hangup-from-another-conversation-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "Only the call's own conversation hangs up a 1:1.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "mal",
+        "fromSelf": false,
+        "reason": "normal"
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "oneToOne": true
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "in-call-group-member-hangup-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "One member leaving does not end a group call.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "normal"
+      },
+      "expect": {
+        "state": {
+          "phase": "inCall",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "oneToOne": false
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "in-call-1to1-hang-up",
+      "kind": "call",
+      "call": "ring",
+      "why": "Hanging up a 1:1 ends it for both.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangUp"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "normal"
+            }
+          },
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-call-group-hang-up",
+      "kind": "call",
+      "call": "ring",
+      "why": "Leaving a group call is just leaving.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "hangUp"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-call-group-caller-hangs-up-alone-cancels-ring",
+      "kind": "call",
+      "call": "ring",
+      "why": "A group caller who leaves before anyone joined cancels the ring, so nobody rings into an empty room.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "oneToOne": false,
+        "rang": true
+      },
+      "event": {
+        "type": "hangUp",
+        "alone": true
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "normal"
+            }
+          },
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-call-group-caller-hangs-up-with-others-keeps-ring",
+      "kind": "call",
+      "call": "ring",
+      "why": "Once someone joined, the caller leaving is just leaving: others may still join.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "oneToOne": false,
+        "rang": true
+      },
+      "event": {
+        "type": "hangUp",
+        "alone": false
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-call-group-joiner-hangs-up-alone-cancels-nothing",
+      "kind": "call",
+      "call": "ring",
+      "why": "A member who joined someone else's call never cancels that caller's ring.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "hangUp",
+        "alone": true
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "in-call-group-notice-caller-alone-cancels-nothing",
+      "kind": "call",
+      "call": "ring",
+      "why": "A group above the ring cap rang nobody, so there is no ring to cancel.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "media": "video",
+        "oneToOne": false
+      },
+      "event": {
+        "type": "hangUp",
+        "alone": true
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "idle-hang-up-nothing",
+      "kind": "call",
+      "call": "ring",
+      "why": "Nothing to hang up.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "hangUp"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "glare-winner-keeps-its-call",
+      "kind": "call",
+      "call": "ring",
+      "why": "Both called at once; the larger call id keeps its call.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "outgoing",
+          "callId": "0000000000000000000000000000000b",
+          "conversation": "dm-ava-fay",
+          "media": "video"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "glare-loser-rings-for-the-other",
+      "kind": "call",
+      "call": "ring",
+      "why": "The smaller call id ends its own call with normal and rings for the other.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000b",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "normal"
+            }
+          },
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "glare"
+          },
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000b",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000b",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "glare-equal-ids-both-lose",
+      "kind": "call",
+      "call": "ring",
+      "why": "Equal call ids: end mine and answer busy.",
+      "state": {
+        "phase": "outgoing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000A",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000a",
+              "type": "hangup",
+              "reason": "normal"
+            }
+          },
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "glare"
+          },
+          {
+            "type": "send",
+            "to": "conversation",
+            "signal": {
+              "version": 1,
+              "callId": "0000000000000000000000000000000A",
+              "type": "hangup",
+              "reason": "busy"
+            }
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000A",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "recall-replaces-a-stale-1to1",
+      "kind": "call",
+      "call": "ring",
+      "why": "Already in a 1:1 and the same person calls again: the old call is over and the new one rings.",
+      "state": {
+        "phase": "inCall",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000b",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "leave",
+            "callId": "0000000000000000000000000000000a"
+          },
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "completed"
+          },
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000b",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000b",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-already-ended-offer-ignored",
+      "kind": "call",
+      "call": "ring",
+      "why": "A redelivered or replayed offer for a call in this device's history rings nothing.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed",
+        "alreadyEnded": true
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "ring-already-ended-while-ringing-another-is-not-busy",
+      "kind": "call",
+      "call": "ring",
+      "why": "A replayed old offer while ringing is not a second caller: no busy reply.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-ava-fay",
+        "sender": "bo",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed",
+        "alreadyEnded": true
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": []
+      }
+    },
+    {
+      "id": "hangup-before-offer-is-kept",
+      "kind": "call",
+      "call": "ring",
+      "why": "A Hangup for a call this device is not on is handed back to keep, by call id.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "reason": "normal"
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "rememberHangup",
+            "callId": "0000000000000000000000000000000a",
+            "hangup": {
+              "sender": "ava",
+              "fromSelf": false,
+              "reason": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "hangup-for-another-call-while-ringing-is-kept",
+      "kind": "call",
+      "call": "ring",
+      "why": "A Hangup for a different call while one rings is kept too; the ring goes on.",
+      "state": {
+        "phase": "ringing",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "media": "video",
+        "caller": "ava",
+        "oneToOne": true
+      },
+      "event": {
+        "type": "hangup",
+        "callId": "0000000000000000000000000000000b",
+        "conversation": "dm-ava-fay",
+        "sender": "bo",
+        "fromSelf": false,
+        "reason": "normal"
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "dm-ava-fay",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": true
+        },
+        "effects": [
+          {
+            "type": "rememberHangup",
+            "callId": "0000000000000000000000000000000b",
+            "hangup": {
+              "sender": "bo",
+              "fromSelf": false,
+              "reason": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "offer-after-callers-hangup-never-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "Its caller already hung up: a missed call, never a ring.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed",
+        "earlyHangup": {
+          "sender": "ava",
+          "fromSelf": false,
+          "reason": "normal"
+        }
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "missed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "offer-after-answered-elsewhere-never-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "My own device already answered it: answered elsewhere, never a ring.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed",
+        "earlyHangup": {
+          "sender": "fay",
+          "fromSelf": true,
+          "reason": "accepted_elsewhere"
+        }
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "answeredElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "offer-after-declined-elsewhere-never-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "My own device already declined it (a 1:1 decline reaches my devices as itself).",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed",
+        "earlyHangup": {
+          "sender": "fay",
+          "fromSelf": true,
+          "reason": "declined"
+        }
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "declinedElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "offer-after-other-members-hangup-rings",
+      "kind": "call",
+      "call": "ring",
+      "why": "Another member leaving a group call does not end its ring.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "group-friday",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "createdAtMs": 1789516798500,
+        "nowMs": 1789516800000,
+        "memberCount": 5,
+        "oneToOne": false,
+        "gate": "allowed",
+        "earlyHangup": {
+          "sender": "bo",
+          "fromSelf": false,
+          "reason": "normal"
+        }
+      },
+      "expect": {
+        "state": {
+          "phase": "ringing",
+          "callId": "0000000000000000000000000000000a",
+          "conversation": "group-friday",
+          "media": "video",
+          "caller": "ava",
+          "oneToOne": false
+        },
+        "effects": [
+          {
+            "type": "ring",
+            "callId": "0000000000000000000000000000000a",
+            "media": "video",
+            "caller": "ava"
+          },
+          {
+            "type": "armTimeout",
+            "callId": "0000000000000000000000000000000a",
+            "afterMs": 60000
+          }
+        ]
+      }
+    },
+    {
+      "id": "stale-offer-after-answered-elsewhere-is-answered-elsewhere",
+      "kind": "call",
+      "call": "ring",
+      "why": "The kept Hangup says how it ended, ahead of the Offer's age.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 120000,
+        "createdAtMs": 1789516680000,
+        "nowMs": 1789516800000,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed",
+        "earlyHangup": {
+          "sender": "fay",
+          "fromSelf": true,
+          "reason": "accepted_elsewhere"
+        }
+      },
+      "expect": {
+        "state": {
+          "phase": "idle"
+        },
+        "effects": [
+          {
+            "type": "ended",
+            "callId": "0000000000000000000000000000000a",
+            "outcome": "answeredElsewhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ring-unknown-event-refused",
+      "kind": "call",
+      "call": "ring",
+      "why": "An event this build does not know is an error, never a silent no-op.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "teleport"
+      },
+      "expectError": "could not read the ring event"
+    },
+    {
+      "id": "ring-offer-missing-field-refused",
+      "kind": "call",
+      "call": "ring",
+      "why": "An offer without its member count cannot be judged.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a"
+      },
+      "expectError": "could not read the ring event"
+    },
+    {
+      "id": "ring-offer-missing-clock-refused",
+      "kind": "call",
+      "call": "ring",
+      "why": "An offer without the caller's stamp and this device's clock cannot be judged fresh.",
+      "state": {
+        "phase": "idle"
+      },
+      "event": {
+        "type": "offer",
+        "callId": "0000000000000000000000000000000a",
+        "conversation": "dm-ava-fay",
+        "sender": "ava",
+        "fromSelf": false,
+        "media": "video",
+        "ring": true,
+        "ageMs": 1500,
+        "memberCount": 2,
+        "oneToOne": true,
+        "gate": "allowed"
+      },
+      "expectError": "could not read the ring event"
+    },
+    {
+      "id": "ring-unknown-phase-refused",
+      "kind": "call",
+      "call": "ring",
+      "why": "A state this build did not write.",
+      "state": {
+        "phase": "onHold"
+      },
+      "event": {
+        "type": "hangUp"
+      },
+      "expectError": "could not read the ring state"
+    },
+    {
+      "id": "self-update-offset-0-of-1",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 0,
+      "participants": 1,
+      "expect": {
+        "offsetMs": 0
+      }
+    },
+    {
+      "id": "self-update-offset-0-of-4",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 0,
+      "participants": 4,
+      "expect": {
+        "offsetMs": 0
+      }
+    },
+    {
+      "id": "self-update-offset-1-of-4",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 1,
+      "participants": 4,
+      "expect": {
+        "offsetMs": 150000
+      }
+    },
+    {
+      "id": "self-update-offset-3-of-4",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 3,
+      "participants": 4,
+      "expect": {
+        "offsetMs": 450000
+      }
+    },
+    {
+      "id": "self-update-offset-2-of-3",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 2,
+      "participants": 3,
+      "expect": {
+        "offsetMs": 400000
+      }
+    },
+    {
+      "id": "self-update-offset-15-of-16",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 15,
+      "participants": 16,
+      "expect": {
+        "offsetMs": 562500
+      }
+    },
+    {
+      "id": "self-update-offset-5-of-5",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 5,
+      "participants": 5,
+      "expect": {
+        "offsetMs": 480000
+      }
+    },
+    {
+      "id": "self-update-offset-0-of-0",
+      "kind": "call",
+      "call": "selfUpdateOffset",
+      "why": "600000 // participants * min(rank, participants - 1).",
+      "rank": 0,
+      "participants": 0,
+      "expect": {
+        "offsetMs": 0
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-counting-leaf-0-gen-0",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 0,
+      "epoch": 0,
+      "generation": 0,
+      "expect": {
+        "senderKeyHex": "fc0ebf59c0d78029f8b0ff57437fd333",
+        "keyIndex": 0,
+        "frameKeyHex": "223b9a072e40d465d4ae9e0d64e43f65"
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-counting-leaf-3-gen-1",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 3,
+      "epoch": 17,
+      "generation": 1,
+      "expect": {
+        "senderKeyHex": "e9ffc7105a5a93ee8f360bf06a07b92b",
+        "keyIndex": 17,
+        "frameKeyHex": "9788b75767722703d265cb4eb7850211"
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-counting-leaf-7-gen-16",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 7,
+      "epoch": 255,
+      "generation": 16,
+      "expect": {
+        "senderKeyHex": "2d7fc99a5f843ff3970e7e25a8a945a7",
+        "keyIndex": 240,
+        "frameKeyHex": "8b06989b22c7ecdd708c46ccb8b66d77"
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-counting-leaf-4294967295-gen-4294967295",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 4294967295,
+      "epoch": 9007199254740991,
+      "generation": 4294967295,
+      "expect": {
+        "senderKeyHex": "0807fbd14ee8b764251221ceb6aefc6a",
+        "keyIndex": 255,
+        "frameKeyHex": "2d540b326a71070c345289283bbf66c8"
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-zeros-leaf-0-gen-0",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 0,
+      "epoch": 0,
+      "generation": 0,
+      "expect": {
+        "senderKeyHex": "1fe828255e7abb1b77afc79552db22e1",
+        "keyIndex": 0,
+        "frameKeyHex": "7d37d20475fac49c37f6da851a7fbaf2"
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-zeros-leaf-3-gen-1",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 3,
+      "epoch": 17,
+      "generation": 1,
+      "expect": {
+        "senderKeyHex": "a71d10207bef8d04f43af86f09953630",
+        "keyIndex": 17,
+        "frameKeyHex": "c63ccd2a037d435542606b1d72ecc932"
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-zeros-leaf-7-gen-16",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 7,
+      "epoch": 255,
+      "generation": 16,
+      "expect": {
+        "senderKeyHex": "7e7f1d9aa2d33d51cedf3fb7e359950e",
+        "keyIndex": 240,
+        "frameKeyHex": "7c931c1e68bfa233f52fc88a23ab5df3"
+      }
+    },
+    {
+      "id": "sender-key-v2-counting-zeros-leaf-4294967295-gen-4294967295",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 4294967295,
+      "epoch": 9007199254740991,
+      "generation": 4294967295,
+      "expect": {
+        "senderKeyHex": "9bc3e7b04e86628e22914f316e56d78b",
+        "keyIndex": 255,
+        "frameKeyHex": "87f52935f65612456691bffcd790835c"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-counting-leaf-0-gen-0",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 0,
+      "epoch": 0,
+      "generation": 0,
+      "expect": {
+        "senderKeyHex": "cd0e95408a8e6de3fe457dbdf79d0864",
+        "keyIndex": 0,
+        "frameKeyHex": "bc275e64e0a8d5bbac56ab77db24838b"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-counting-leaf-3-gen-1",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 3,
+      "epoch": 17,
+      "generation": 1,
+      "expect": {
+        "senderKeyHex": "fa2bfb67ffa8cbc60b1afeb321bc7510",
+        "keyIndex": 17,
+        "frameKeyHex": "21411f0d36099e02c5cf5a8a4a000462"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-counting-leaf-7-gen-16",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 7,
+      "epoch": 255,
+      "generation": 16,
+      "expect": {
+        "senderKeyHex": "d1c0c5dadab3a83d9f2f06a81aa8c9fe",
+        "keyIndex": 240,
+        "frameKeyHex": "ced8348956810b4ede7dfbee3b92f9fd"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-counting-leaf-4294967295-gen-4294967295",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "leafIndex": 4294967295,
+      "epoch": 9007199254740991,
+      "generation": 4294967295,
+      "expect": {
+        "senderKeyHex": "9007a65f9c4e31ab2f5d25ddff43937d",
+        "keyIndex": 255,
+        "frameKeyHex": "03f3da9a388a575e8f1bd649821d8099"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-zeros-leaf-0-gen-0",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 0,
+      "epoch": 0,
+      "generation": 0,
+      "expect": {
+        "senderKeyHex": "f6c74b820a53288f8efe65b1c4bd2d99",
+        "keyIndex": 0,
+        "frameKeyHex": "0140ca48d9709acb456f32dc6e1d909d"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-zeros-leaf-3-gen-1",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 3,
+      "epoch": 17,
+      "generation": 1,
+      "expect": {
+        "senderKeyHex": "0906124bd17885ef65607a9406ba8b53",
+        "keyIndex": 17,
+        "frameKeyHex": "ec69ae28bfd2618529c55c4c333b0fee"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-zeros-leaf-7-gen-16",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 7,
+      "epoch": 255,
+      "generation": 16,
+      "expect": {
+        "senderKeyHex": "8965edab751ef062655b0b7f05b23c31",
+        "keyIndex": 240,
+        "frameKeyHex": "45f1528c8417121a6831d32cc2b14495"
+      }
+    },
+    {
+      "id": "sender-key-v2-exported-zeros-leaf-4294967295-gen-4294967295",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "HKDF-Expand(HKDF-Extract(salt = call_root_v2, IKM = media secret), 'peachy call sender v2' || u32be(leaf), 16); key index (e mod 16) << 4 | (g mod 16); the frame key as in v1.",
+      "callRootHex": "4bdd358a4b8d58000e45bd550b03bbf9182bcabd6e319afe40b24a2c00c41e8b",
+      "mediaSecretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "leafIndex": 4294967295,
+      "epoch": 9007199254740991,
+      "generation": 4294967295,
+      "expect": {
+        "senderKeyHex": "2d1c1f0a9a6cdd6f1a71128cceca0da3",
+        "keyIndex": 255,
+        "frameKeyHex": "aaa2ec87ee7cf93369435a768eb09d98"
+      }
+    },
+    {
+      "id": "sender-key-v2-short-secret",
+      "kind": "call",
+      "call": "senderKeyV2",
+      "why": "A media secret is 32 random bytes.",
+      "callRootHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mediaSecretHex": "00000000000000000000000000000000",
+      "leafIndex": 0,
+      "epoch": 0,
+      "generation": 0,
+      "expectError": "a media secret is 32 bytes"
+    },
+    {
+      "id": "media-advance-0",
+      "kind": "call",
+      "call": "mediaAdvance",
+      "why": "HKDF-Expand(PRK = secret, 'peachy call media advance', 32), applied once per newcomer.",
+      "secretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "steps": 0,
+      "expect": {
+        "secretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283"
+      }
+    },
+    {
+      "id": "media-advance-1",
+      "kind": "call",
+      "call": "mediaAdvance",
+      "why": "HKDF-Expand(PRK = secret, 'peachy call media advance', 32), applied once per newcomer.",
+      "secretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "steps": 1,
+      "expect": {
+        "secretHex": "d003e88c4bcffa2e8613e4d884fe3754d48b6671f404b9c8f31a5e251c912a34"
+      }
+    },
+    {
+      "id": "media-advance-2",
+      "kind": "call",
+      "call": "mediaAdvance",
+      "why": "HKDF-Expand(PRK = secret, 'peachy call media advance', 32), applied once per newcomer.",
+      "secretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "steps": 2,
+      "expect": {
+        "secretHex": "f1b0418685a8fe144baa10e31571f818af1b5e8344162935ba3966b8efaa5108"
+      }
+    },
+    {
+      "id": "media-advance-64",
+      "kind": "call",
+      "call": "mediaAdvance",
+      "why": "HKDF-Expand(PRK = secret, 'peachy call media advance', 32), applied once per newcomer.",
+      "secretHex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "steps": 64,
+      "expect": {
+        "secretHex": "a033ece50d00154baed2247a5c53a7cd290a786dc9e35e99da2ce8d3851fc48e"
+      }
+    },
+    {
+      "id": "media-key-pair-recipient",
+      "kind": "call",
+      "call": "mediaKeyPair",
+      "why": "RFC 9180 DeriveKeyPair for DHKEM(X25519, HKDF-SHA256).",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "expect": {
+        "publicKeyHex": "b508c150f19130183b4cc5d817d96d699471a53358efd03b03d8c122cdff2c64"
+      }
+    },
+    {
+      "id": "media-key-pair-other",
+      "kind": "call",
+      "call": "mediaKeyPair",
+      "why": "RFC 9180 DeriveKeyPair for DHKEM(X25519, HKDF-SHA256).",
+      "ikmHex": "86297b0e2fd04991e6e7b42f47629bf1368e2a53d7a8028e000d68e312ac055f",
+      "expect": {
+        "publicKeyHex": "08ad9d8cd16c00f339b833140dff5329a17ed6905f85a996928d955aec05cb2b"
+      }
+    },
+    {
+      "id": "open-media-grant-first",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "HPKE base mode, info 'peachy call media key v2' || call_id || u32be(sender_leaf) || u32be(to_leaf), empty aad; the plaintext a MediaGrantPayload.",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "callIdHex": "00112233445566778899aabbccddeeff",
+      "senderLeaf": 2,
+      "toLeaf": 5,
+      "encHex": "a90c4c976d6187947805633594f1bfb078eeb1f939b408ee99f1c0622ec6294d",
+      "ciphertextHex": "6fac7195760e41af965da2af291e4ee4e6d539ff84979355a5f8f09f9335c5f9ea7ff9a0667aa26dc1f48fa72b387d94a8b8c604ff0c5f059f889640b6e8ad903e8b1e569f1c898ffcfa7b9ed335cadb6986",
+      "expect": {
+        "generation": 0,
+        "secretHex": "19cd7673e83700074f7d7920697eec2931f21485ddca7803e82be26cdc7a3dff",
+        "sessionId": "cf-session-1",
+        "trackNames": [
+          "audio-0",
+          "video-0"
+        ]
+      }
+    },
+    {
+      "id": "open-media-grant-other-recipient-refused",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "Sealed to another participant's call key: a member who never joined holds none.",
+      "ikmHex": "86297b0e2fd04991e6e7b42f47629bf1368e2a53d7a8028e000d68e312ac055f",
+      "callIdHex": "00112233445566778899aabbccddeeff",
+      "senderLeaf": 2,
+      "toLeaf": 5,
+      "encHex": "a90c4c976d6187947805633594f1bfb078eeb1f939b408ee99f1c0622ec6294d",
+      "ciphertextHex": "6fac7195760e41af965da2af291e4ee4e6d539ff84979355a5f8f09f9335c5f9ea7ff9a0667aa26dc1f48fa72b387d94a8b8c604ff0c5f059f889640b6e8ad903e8b1e569f1c898ffcfa7b9ed335cadb6986",
+      "expectError": "the media grant did not open"
+    },
+    {
+      "id": "open-media-grant-other-sender-leaf-refused",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "The sender's leaf is bound in: a grant replayed as another sender's does not open.",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "callIdHex": "00112233445566778899aabbccddeeff",
+      "senderLeaf": 3,
+      "toLeaf": 5,
+      "encHex": "a90c4c976d6187947805633594f1bfb078eeb1f939b408ee99f1c0622ec6294d",
+      "ciphertextHex": "6fac7195760e41af965da2af291e4ee4e6d539ff84979355a5f8f09f9335c5f9ea7ff9a0667aa26dc1f48fa72b387d94a8b8c604ff0c5f059f889640b6e8ad903e8b1e569f1c898ffcfa7b9ed335cadb6986",
+      "expectError": "the media grant did not open"
+    },
+    {
+      "id": "open-media-grant-other-to-leaf-refused",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "The recipient's leaf is bound in.",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "callIdHex": "00112233445566778899aabbccddeeff",
+      "senderLeaf": 2,
+      "toLeaf": 6,
+      "encHex": "a90c4c976d6187947805633594f1bfb078eeb1f939b408ee99f1c0622ec6294d",
+      "ciphertextHex": "6fac7195760e41af965da2af291e4ee4e6d539ff84979355a5f8f09f9335c5f9ea7ff9a0667aa26dc1f48fa72b387d94a8b8c604ff0c5f059f889640b6e8ad903e8b1e569f1c898ffcfa7b9ed335cadb6986",
+      "expectError": "the media grant did not open"
+    },
+    {
+      "id": "open-media-grant-other-call-refused",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "The call id is bound in: a grant from one call does not open in another.",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "callIdHex": "0000000000000000000000000000000a",
+      "senderLeaf": 2,
+      "toLeaf": 5,
+      "encHex": "a90c4c976d6187947805633594f1bfb078eeb1f939b408ee99f1c0622ec6294d",
+      "ciphertextHex": "6fac7195760e41af965da2af291e4ee4e6d539ff84979355a5f8f09f9335c5f9ea7ff9a0667aa26dc1f48fa72b387d94a8b8c604ff0c5f059f889640b6e8ad903e8b1e569f1c898ffcfa7b9ed335cadb6986",
+      "expectError": "the media grant did not open"
+    },
+    {
+      "id": "open-media-grant-flipped-refused",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "Any changed bit.",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "callIdHex": "00112233445566778899aabbccddeeff",
+      "senderLeaf": 2,
+      "toLeaf": 5,
+      "encHex": "a90c4c976d6187947805633594f1bfb078eeb1f939b408ee99f1c0622ec6294d",
+      "ciphertextHex": "6eac7195760e41af965da2af291e4ee4e6d539ff84979355a5f8f09f9335c5f9ea7ff9a0667aa26dc1f48fa72b387d94a8b8c604ff0c5f059f889640b6e8ad903e8b1e569f1c898ffcfa7b9ed335cadb6986",
+      "expectError": "the media grant did not open"
+    },
+    {
+      "id": "open-media-grant-rotated",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "HPKE base mode, info 'peachy call media key v2' || call_id || u32be(sender_leaf) || u32be(to_leaf), empty aad; the plaintext a MediaGrantPayload.",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "callIdHex": "00112233445566778899aabbccddeeff",
+      "senderLeaf": 2,
+      "toLeaf": 5,
+      "encHex": "61b999726e06f2231b0add71ee3086ed7f7de3cadc6a4fd9964337083fef7e5b",
+      "ciphertextHex": "0bd0de3489991bfeca0a6d7b91f24ba49f5cfa41bcc08d142d4537a3828562c9007249bdd8b21212581902086bc3bf71633c4865967b380ad00b6a01bbd8b575acb5",
+      "expect": {
+        "generation": 9,
+        "secretHex": "19cd7673e83700074f7d7920697eec2931f21485ddca7803e82be26cdc7a3dff",
+        "sessionId": "cf-session-1",
+        "trackNames": []
+      }
+    },
+    {
+      "id": "open-media-grant-no-session",
+      "kind": "call",
+      "call": "openMediaGrant",
+      "why": "HPKE base mode, info 'peachy call media key v2' || call_id || u32be(sender_leaf) || u32be(to_leaf), empty aad; the plaintext a MediaGrantPayload.",
+      "ikmHex": "2b292e8e7266d27b3ba210343c0ff9eaa47303285ff22fb7e283c060e7018201",
+      "callIdHex": "00112233445566778899aabbccddeeff",
+      "senderLeaf": 2,
+      "toLeaf": 5,
+      "encHex": "65835b9ba5441f60ee842575a4ac3da860bfb5e3402b2bfc9718ea18095ef731",
+      "ciphertextHex": "ded386911f89b8fa54db2414ef42238dd9bd92bef39a194172113e8c810ad6f52470d9a2c0c40da2c8211b9a93fc2180907ffefd",
+      "expect": {
+        "generation": 1,
+        "secretHex": "19cd7673e83700074f7d7920697eec2931f21485ddca7803e82be26cdc7a3dff",
+        "sessionId": "",
+        "trackNames": []
+      }
+    }
+  ]
+}

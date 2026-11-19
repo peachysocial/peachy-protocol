@@ -1,0 +1,439 @@
+{
+  "version": 1,
+  "about": [
+    "The golden fixture for the device seal (mls/core/src/device_seal.rs; not part of this specification): one 226-byte box per recipient device, beside a version 3 envelope, that names the group, the sender's device key and the epoch envelope secret, so a device whose copy forked or fell behind keeps the envelope and opens it once it is back.",
+    "seal = 01 || E || c1 || c2. E = X25519(e, 9); k1 = HKDF-SHA256(X25519(e, R), \"peachy device seal v1 sender\" || 00 || E || R_ed); c1 = AES-256-GCM(k1, zero nonce, S_ed, aad 01 || E); k2 = HKDF-SHA256(X25519(e, R) || X25519(s, R), \"peachy device seal v1 body\" || 00 || E || R_ed || S_ed || c1); c2 = AES-256-GCM(k2, zero nonce, body, aad 01 || E || c1); body = len || group id zero-padded to 64 || epoch secret (32) || SHA-256(envelope) (32). Ed25519 device keys serve as X25519: the public key through the birational map, the secret the first half of SHA-512 over the seed. HKDF has an empty salt.",
+    "A key, the recipient's or the sender's, is taken only in its one canonical spelling, on the curve, and of the prime order: no small-order or mixed-order key, and no y at or past p.",
+    "`open` answers every refusal as `opened: false`, and `seal` as `refused: true`, so every replay compares one object; the product door gives one opaque error for all of them.",
+    "Every build reads seals, and `constants.sends` is false: no build writes one.",
+    "Written by an independent implementation (Python's hashlib, the cryptography package's Ed25519, X25519, HKDF and AES-GCM, and the Edwards arithmetic by hand), so the Rust replay is a second opinion. Replayed through the fixture door (kind \"device_seal\") in Rust, JavaScript and Swift (and, in Peachy's Android client, Kotlin)."
+  ],
+  "cases": [
+    {
+      "id": "constants",
+      "kind": "device_seal",
+      "call": "constants",
+      "why": "The seal's version byte, its one length, its body's, the longest group id it carries, the two HKDF domains, and whether this build SENDS seals: false, so every build reads them and none writes them.",
+      "expect": {
+        "version": 1,
+        "bytes": 226,
+        "bodyBytes": 129,
+        "maxGroupIdBytes": 64,
+        "senderDomain": "peachy device seal v1 sender",
+        "bodyDomain": "peachy device seal v1 body",
+        "sends": false
+      }
+    },
+    {
+      "id": "seal-ada-to-bo",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "Ada's device seals the group, the epoch secret and the envelope's digest to Bo's device key, with a given ephemeral: these exact bytes.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0",
+      "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expect": {
+        "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e"
+      }
+    },
+    {
+      "id": "seal-to-own-device",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "A device seals to its own key too (every send addresses the sender's own device): both agreements are then with itself.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+      "expect": {
+        "sealHex": "015869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67b7b368e1332806f954c9eccb6a7f77138969606afd853f2c96b5cddd51162f30545676d41320e13a98783b53678dbb3fc5b91e7a307c6f50d80630b9dbf513aba13954fd677c11d3558f1619115e515a75d7d93e164832a6b608e588c6c97f7f78a81f4f10ff18642ef17ba564bcfa62e7bf0d9ccd7fe9105a0b7cad8a581210d4d6f5c6613c15b2edd171cc56a57767d8ae186d1f23d8e968cded3e354a86cc204ba079d77994d0c59ff57e8b650e89eed05bf5143d1be4018e92db828aaccaeb5"
+      }
+    },
+    {
+      "id": "seal-longest-group-id",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "A 64-byte group id fills the slot exactly.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0",
+      "groupIdHex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
+      "expect": {
+        "sealHex": "0164b101b1d0be5a8704bd078f9895001fc03e8e9f9522f188dd128d9846d4846640279ead07c9f3b3bad1831b4a52c9db9e58ae6b961957bcdde52aa4957ff815c1fd35d88a3f6b0eb3d3abea49c70efa722f852f1ac417c006f7fbd22d8f1fd0c630e3f3b4f17bc4d0a358410511d5eef54861ffd460c5795979a56cbbf23fb4699989c3de50a137a29369f56654fecb0886cb7908836456af3a6dec4b740e2dfe6c87d99255227a1ee6fe9410da012ce198b3093253c7776f131009edbf0c9a729a480619ad175ab441acccc8278d258e6638d47acb258bf77df27c459bdf6837"
+      }
+    },
+    {
+      "id": "seal-refuses-a-longer-group-id",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "65 bytes do not fit the slot: no seal, so every seal stays one length.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0",
+      "groupIdHex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f78",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expect": {
+        "refused": true
+      }
+    },
+    {
+      "id": "seal-refuses-an-empty-group-id",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "No group, no seal.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0",
+      "groupIdHex": "",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expect": {
+        "refused": true
+      }
+    },
+    {
+      "id": "seal-refuses-a-small-order-key",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "The identity point as a recipient: every agreement with it is zero.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "0100000000000000000000000000000000000000000000000000000000000000",
+      "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expect": {
+        "refused": true
+      }
+    },
+    {
+      "id": "seal-refuses-a-key-off-the-curve",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "A y with no x: not a key.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "0200000000000000000000000000000000000000000000000000000000000000",
+      "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expect": {
+        "refused": true
+      }
+    },
+    {
+      "id": "seal-refuses-a-non-canonical-key",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "A y at or past p: a second spelling of a point that is not of small order. A key has one spelling, and is of the prime order.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+      "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expect": {
+        "refused": true
+      }
+    },
+    {
+      "id": "seal-refuses-a-mixed-order-key",
+      "kind": "device_seal",
+      "call": "seal",
+      "why": "Bo's key plus a point of order 8: the same X25519 agreements, another Ed25519 key, and no device's. Only keys of the prime order are keys.",
+      "senderSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "recipientKeyHex": "14f1182f309bf4e805188d364bcb3ca8810b321d305192d520c357e7f74cd166",
+      "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+      "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "ephemeralHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expect": {
+        "refused": true
+      }
+    },
+    {
+      "id": "open-at-bo",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "Bo's device opens it: Ada's key, the group, the epoch secret.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": true,
+        "senderKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+        "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+        "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "open-own-seal",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A seal to the sender's own key opens for it.",
+      "recipientSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "sealHex": "015869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67b7b368e1332806f954c9eccb6a7f77138969606afd853f2c96b5cddd51162f30545676d41320e13a98783b53678dbb3fc5b91e7a307c6f50d80630b9dbf513aba13954fd677c11d3558f1619115e515a75d7d93e164832a6b608e588c6c97f7f78a81f4f10ff18642ef17ba564bcfa62e7bf0d9ccd7fe9105a0b7cad8a581210d4d6f5c6613c15b2edd171cc56a57767d8ae186d1f23d8e968cded3e354a86cc204ba079d77994d0c59ff57e8b650e89eed05bf5143d1be4018e92db828aaccaeb5",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": true,
+        "senderKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+        "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+        "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "open-longest-group-id",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "The full slot reads back whole.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0164b101b1d0be5a8704bd078f9895001fc03e8e9f9522f188dd128d9846d4846640279ead07c9f3b3bad1831b4a52c9db9e58ae6b961957bcdde52aa4957ff815c1fd35d88a3f6b0eb3d3abea49c70efa722f852f1ac417c006f7fbd22d8f1fd0c630e3f3b4f17bc4d0a358410511d5eef54861ffd460c5795979a56cbbf23fb4699989c3de50a137a29369f56654fecb0886cb7908836456af3a6dec4b740e2dfe6c87d99255227a1ee6fe9410da012ce198b3093253c7776f131009edbf0c9a729a480619ad175ab441acccc8278d258e6638d47acb258bf77df27c459bdf6837",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": true,
+        "senderKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+        "groupIdHex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
+        "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "open-refuses-another-device",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "Cy's device: the first layer does not open.",
+      "recipientSeedHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-the-sender",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "Ada made the seal for Bo, and cannot open it herself.",
+      "recipientSeedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-another-envelope",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "The seal names its one envelope by digest.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6421",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-another-version",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "Version byte 2.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0207a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-flipped-ephemeral",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A bit of E: both keys change.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc152093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-flipped-sender-layer",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A bit of c1.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed21cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-flipped-body",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A bit of c2.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc111b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-short-seal",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "225 bytes.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c8",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-long-seal",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "227 bytes.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e00",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-zero-ephemeral",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "E = 0, a small-order point: its agreement is zero.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "010000000000000000000000000000000000000000000000000000000000000000bbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a625b51e05005cbefd15cfa5304f0c81e",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-small-order-sender",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A sender key that is the identity point, its body layer keyed with the zero agreement a reader that did not check would compute: whoever forged it holds no key.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c6ab5aa065283598bf64a2ab0cab5822c191f7f74967fa45eaae1a46e46e56e5d8150d23985b77841ca53c4795035975b65e3c933aafda83a6a464395aae8b58be65b54a69b58577329a7f1182c7a0e40376a307a27434a811a628aa8906cbfeba0eb6b768633d077a790f108292f0d83cf64b4de762b470dae437396201b1825481631b4c42dc453eea7289f9855e1cbe6cd98d12307aa4fc54e7a7690d9f00845e2cbacae04168fa3c32ad6f5e8f77fdee6feca8bc4cd17cd490b06f738d48451",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-sender-off-the-curve",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A sender key with no point: no static agreement.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c69b5aa065283598bf64a2ab0cab5822c191f7f74967fa45eaae1a46e46e56e5df86dd636b1f91c7ee42cf69cb8989e9df9959a87f808ee1ec513ff27947d4ba386524b24010a00367e28e049366afc60b4c4d6756aa9e07b2fa6a0838f931dca8e9edfb57243f474cc09d644b968c54050256f6fc5688c57a67a8bb139c78b5b63df383fd9f704ff3b4ef394dfed8c5d0ca5388725e648cf146b57bf962de7ce85875489082facd5a401de49aa7071473a781b3fb6724ae28427f6790b04a4c752",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-non-canonical-sender",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A sender key spelled with a y past p, its body layer keyed with the agreement a reader that reduced y would compute: refused for the key, not for its layers.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c9b4a55f9ad7ca67409b5d54f354a7dd3e6e0808b69805ba1551e5b91b91a9122e4498a7b30c5b6a5547ab51b73464f1402584a1ba5b77760a51aebbd882d239c57494baa5a204a454fca4a5b9b54a07c7515d9bbb291f3429e03fc00d5f98236de31dbeba9ca8349d5d0006abe46efcc31e95f016235b9ac8a712dbe90078f8bd579d6ca743d9fcb488bf0940cae7387f275cdf14019811e595ebf263305f5026d074169e368a7aaa0d7e2d1e9d2a6569fa079124b56a3f14ca8a58b015b0b9e60",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-mixed-order-sender",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "Ada's seal naming Ada's key plus a point of order 8, its body layer keyed with Ada's own agreement (which the order-8 part does not change): refused, since that key is no device's.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c6e5812c433e64a8f1c7970f35d55eb4786ac03ed3cff87b0bf62069da2d8f1b9aad8199f9bcc5c877e554a4bf92620e696d4bed8469353119c0639c0966f14639f3eff237d9f579bc18ed7f1c47a29cc68dc6ac2b38b66b94b89c717bae12667490f98f2bdfd8a9ea914e6dc1359c2102b303e90dc1c48c6d6e3095972f55348dbffe68ffe16ca4ac10b719ff5a9737caad6e06c4c39c8d5b925073ff30bec0f2b5599ce1395fac1f9cfa7b5f7b8c0a27e5412ae5cdfb208d1875bf8b49cf24458",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-a-sign-flipped-sender-names-that-key",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "Whoever holds Ada's secret can name -A, Ada's key with its sign bit flipped (the map to X25519 drops the sign): the seal opens and names -A, byte for byte. Harmless: a reader takes a seal only from a key that is a leaf of its group, and -A is none.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "015869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67bf23d580082987bd988fa739dc5ed0a5ae6a584f04b187b4a51d7e10e78994df32ea5923ebc50bf48aa3acd1a27cdfc764e350c982bcd3313777cca5e5d32eb1624c620e3c70e5f1fcb61f9417d5d8b524fe3cc102d6ece71b7f418930c5289b6df2634025ced62c92dbc3885ce56bfcbbcbda4046a3a3122c0d0c43c5051ebdba7c38275e6795565004f49a04c64bbbb13370a074eb01f56bae84e2559e74870cc9c9b93cce019c755e538280a10a3a8a88ed12b1a86da48bae7c8dabb750b263a",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": true,
+        "senderKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c97787b7",
+        "groupIdHex": "33663064396331652d366132622d346337642d386535662d306131623263336434653566",
+        "epochSecretHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+      }
+    },
+    {
+      "id": "open-refuses-a-claimed-sender",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "Cy's device seals, naming Ada's key in the first layer: the body layer is keyed by Cy's agreement, not Ada's, and does not open.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed1c5eb61ae1573174ed33d8ae46ed34c07226140fa6acf549dbda9ad73fe7b12d2e7bd49c044c7130bddfc8b0eb1bc54c819dec735aaad19daccb7359424258c430abd23b9e574f9aafc8470561def06b8c287aa4f69fbe383c8a56ac14ca8feaf20dce5025b3674cb74fc9701fac0284c425c17beff29a0e14d4f957ecc116c241680e9e8cff8cb18c814368e63e9e7ec7",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-nonzero-fill",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A sealed body whose slot past the group id is not all zeros: one spelling only.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76ed9e98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5ce1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72ae60994bc9ae2fd206c2cdbeff267eeb6",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-zero-length-group",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A sealed body naming a group of no bytes.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76edba98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a850961e2a3f41a6688bd671ba3cf86cd",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-refuses-a-group-past-the-slot",
+      "kind": "device_seal",
+      "call": "open",
+      "why": "A sealed body claiming 65 bytes of group id.",
+      "recipientSeedHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sealHex": "0107a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cbbff183426a8ed20cc59420d8ca066cac93d35c38c7ecff12fc1075c8f92e96ab4db140a2f8d164c90449a6e445a76edfb98aa00d73921b7c0a09f6698d96d04a443be426488df3ea367671cea1d6af640909cdf27a1f93c917595a3feba654f0920f1bda69df32133476cb92c76ad2f5de1f7210dc011b42679ab99ba0f02c211c0a3956dd2060cec121a476e6af084418280766331b3de580d8b3503f943c723562d6f361c55edd2127d9ce9c697c72a21f98de7f8ebcd166d063ad8c47ec8de",
+      "envelopeHex": "032ef9cd2ea868d0dee85f18fe629a9a29131278b5207a0efb0bc67fa288660ef400010220626f6479",
+      "expect": {
+        "opened": false
+      }
+    }
+  ]
+}

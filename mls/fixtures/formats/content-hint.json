@@ -1,0 +1,160 @@
+{
+  "_about": [
+    "Golden cases for what a device does with an application message it cannot open, and for the resent lane frame.",
+    "Normative: docs/sealed-messages.md §Content hints.",
+    "Resent lane frames: docs/sealed-messages.md §Asking for a message again.",
+    "`hints` are the four hint values a sender writes into the message's MLS authenticated data. `placeholderGraceMs` is how long a resendable loss stays hidden while its ask is out.",
+    "Each `fates` case is one unopenable message: `hint` is what its authenticated data said, or null for none (or a value the reader does not know). `fate` is `show` (a placeholder now, no ask), `ask` (hidden, asked for, shown after the grace if no answer comes) or `drop` (counted, nothing shown). For an `ask`, `transcript` says whether the held entry waits for a resent transcript message (true) or a resent lane frame (false).",
+    "`urgent` gives the SendSealed urgent bit each hint sends with: derived from the hint and nothing else (docs/delivery.md §Sending).",
+    "`retryKey` cases give a transcript send's `client_message_id`: HMAC-SHA256 under the sending install's own 32-byte secret over `label` then the frame id, its first 16 bytes shaped as a version-4 UUID. A reader who holds the frame id cannot make it.",
+    "`sendLog` holds the author's send-log constants (`maxAgeMs`, `cap`) and `until` cases: a frame sent at `sentAtMs` into a conversation whose timer is `timerSeconds` (0: none) can no longer be answered from `untilMs`.",
+    "`resendFrames` are wire strings of the `resend-frame` answer and what a reader makes of each: the parsed fields, or null for one it must ignore.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "hints": {
+    "default": 0,
+    "resendable": 1,
+    "implicit": 2,
+    "resendableLane": 3
+  },
+  "placeholderGraceMs": 3600000,
+  "fates": [
+    {
+      "name": "a call record says show it now",
+      "hint": 0,
+      "fate": "show"
+    },
+    {
+      "name": "a message is asked for, as a transcript message",
+      "hint": 1,
+      "fate": "ask",
+      "transcript": true
+    },
+    {
+      "name": "a reaction, edit or delete is asked for, as a lane frame",
+      "hint": 3,
+      "fate": "ask",
+      "transcript": false
+    },
+    {
+      "name": "a read mark is dropped",
+      "hint": 2,
+      "fate": "drop"
+    },
+    {
+      "name": "no hint is dropped",
+      "hint": null,
+      "fate": "drop"
+    },
+    {
+      "name": "a hint this build does not know is dropped",
+      "hint": 7,
+      "fate": "drop"
+    }
+  ],
+  "urgent": [
+    {
+      "name": "a call record never notifies",
+      "hint": 0,
+      "urgent": false
+    },
+    {
+      "name": "a message",
+      "hint": 1,
+      "urgent": true
+    },
+    {
+      "name": "a receipt, resend, history share or group event",
+      "hint": 2,
+      "urgent": false
+    },
+    {
+      "name": "a reaction, edit or delete",
+      "hint": 3,
+      "urgent": true
+    }
+  ],
+  "retryKey": {
+    "label": "peachy retry key v1",
+    "cases": [
+      {
+        "name": "a frame id under one install's secret",
+        "secretHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frameId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+        "key": "993d1a4a-ca58-4e08-8efb-4bc58a67f45d"
+      },
+      {
+        "name": "the same frame id under another install's secret",
+        "secretHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "frameId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+        "key": "362122a4-3f2b-4bcc-92e9-0673cc502ecc"
+      },
+      {
+        "name": "another frame id",
+        "secretHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frameId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "key": "a7b74bc0-f2de-4da8-900c-3e7958f5f61d"
+      }
+    ]
+  },
+  "sendLog": {
+    "maxAgeMs": 1209600000,
+    "cap": 500,
+    "until": [
+      {
+        "name": "no timer: two weeks",
+        "sentAtMs": 1000,
+        "timerSeconds": 0,
+        "untilMs": 1209601000
+      },
+      {
+        "name": "a one-hour timer cuts it short",
+        "sentAtMs": 1000,
+        "timerSeconds": 3600,
+        "untilMs": 3601000
+      },
+      {
+        "name": "a four-week timer does not stretch it",
+        "sentAtMs": 1000,
+        "timerSeconds": 2419200,
+        "untilMs": 1209601000
+      }
+    ]
+  },
+  "resendFrames": [
+    {
+      "name": "a reaction sent again",
+      "wire": "{\"peachy\":\"resend-frame\",\"v\":1,\"m\":\"env-1\",\"d\":\"dev-2\",\"f\":\"{\\\"peachy\\\":\\\"reaction\\\",\\\"v\\\":1}\"}",
+      "parsed": {
+        "messageId": "env-1",
+        "forDeviceId": "dev-2",
+        "wire": "{\"peachy\":\"reaction\",\"v\":1}"
+      }
+    },
+    {
+      "name": "an answer may not carry an ask",
+      "wire": "{\"peachy\":\"resend-frame\",\"v\":1,\"m\":\"env-1\",\"d\":\"dev-2\",\"f\":\"{\\\"peachy\\\":\\\"resend-ask\\\",\\\"v\\\":1,\\\"m\\\":\\\"x\\\"}\"}",
+      "parsed": null
+    },
+    {
+      "name": "an answer may not carry another answer",
+      "wire": "{\"peachy\":\"resend-frame\",\"v\":1,\"m\":\"env-1\",\"d\":\"dev-2\",\"f\":\"{\\\"peachy\\\":\\\"resend-frame\\\",\\\"v\\\":1}\"}",
+      "parsed": null
+    },
+    {
+      "name": "no asking device",
+      "wire": "{\"peachy\":\"resend-frame\",\"v\":1,\"m\":\"env-1\",\"d\":\"\",\"f\":\"{\\\"peachy\\\":\\\"reaction\\\",\\\"v\\\":1}\"}",
+      "parsed": null
+    },
+    {
+      "name": "a newer version is not this one",
+      "wire": "{\"peachy\":\"resend-frame\",\"v\":2,\"m\":\"env-1\",\"d\":\"dev-2\",\"f\":\"{\\\"peachy\\\":\\\"reaction\\\",\\\"v\\\":1}\"}",
+      "parsed": null
+    },
+    {
+      "name": "a frame that is not a lane frame",
+      "wire": "{\"peachy\":\"resend-frame\",\"v\":1,\"m\":\"env-1\",\"d\":\"dev-2\",\"f\":\"hello\"}",
+      "parsed": null
+    }
+  ]
+}

@@ -1,0 +1,293 @@
+{
+  "_about": [
+    "Golden cases for reading the account store as all or nothing: which records a read is missing.",
+    "Normative: docs/account-store.md §A complete answer.",
+    "Each case gives the manifest's ids (`manifest_ids`), the ids whose returned value opened under its own id (`returned`), the ids whose returned value did not open (`unreadable`, default empty) and the ids the reader already holds, decoded, from an earlier read (`held`). An id the reader holds but could not decode is not held. A returned id the manifest does not list is ignored.",
+    "`missing` is, in the manifest's order, every listed id that did not come back opened and is not held, plus every listed id whose value came back unreadable even when it is held. A value that does not open (random bytes, another id's value, a version byte the reader does not know) is never another build's record: every writer seals version 0x01. The reader keeps a held copy as it was meanwhile.",
+    "A reader with anything missing asks once more for exactly those ids. `again`, when present, is that second answer (`returned`, `unreadable`), and `refused` says whether the read is then refused: every id asked for again must come back and open, and the version must not have moved. A refused read keeps the reader's cached store, version and floor.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "withheld_records": {
+    "cases": [
+      {
+        "name": "every listed record returned",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "held": [],
+        "missing": []
+      },
+      {
+        "name": "a listed record held from an earlier read",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "22222222222222222222222222222222"
+        ],
+        "held": [
+          "11111111111111111111111111111111"
+        ],
+        "missing": []
+      },
+      {
+        "name": "a new record withheld",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222",
+          "33333333333333333333333333333333"
+        ],
+        "returned": [
+          "33333333333333333333333333333333"
+        ],
+        "held": [
+          "11111111111111111111111111111111"
+        ],
+        "missing": [
+          "22222222222222222222222222222222"
+        ]
+      },
+      {
+        "name": "everything withheld on a first read",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [],
+        "held": [],
+        "missing": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ]
+      },
+      {
+        "name": "an unlisted record returned does not stand in for a listed one",
+        "manifest_ids": [
+          "11111111111111111111111111111111"
+        ],
+        "returned": [
+          "44444444444444444444444444444444"
+        ],
+        "held": [],
+        "missing": [
+          "11111111111111111111111111111111"
+        ]
+      },
+      {
+        "name": "an empty manifest",
+        "manifest_ids": [],
+        "returned": [
+          "44444444444444444444444444444444"
+        ],
+        "held": [
+          "11111111111111111111111111111111"
+        ],
+        "missing": []
+      },
+      {
+        "name": "a returned value of random bytes is missing",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "11111111111111111111111111111111"
+        ],
+        "unreadable": [
+          "22222222222222222222222222222222"
+        ],
+        "held": [],
+        "missing": [
+          "22222222222222222222222222222222"
+        ]
+      },
+      {
+        "name": "another record's value served under a new record's id is missing",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222",
+          "33333333333333333333333333333333"
+        ],
+        "returned": [
+          "11111111111111111111111111111111",
+          "33333333333333333333333333333333"
+        ],
+        "unreadable": [
+          "22222222222222222222222222222222"
+        ],
+        "held": [
+          "11111111111111111111111111111111"
+        ],
+        "missing": [
+          "22222222222222222222222222222222"
+        ]
+      },
+      {
+        "name": "a value whose version byte this build does not read is missing",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "11111111111111111111111111111111"
+        ],
+        "unreadable": [
+          "22222222222222222222222222222222"
+        ],
+        "held": [],
+        "missing": [
+          "22222222222222222222222222222222"
+        ]
+      },
+      {
+        "name": "an unreadable new record, sent whole when asked again",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "11111111111111111111111111111111"
+        ],
+        "unreadable": [
+          "22222222222222222222222222222222"
+        ],
+        "held": [],
+        "missing": [
+          "22222222222222222222222222222222"
+        ],
+        "again": {
+          "returned": [
+            "22222222222222222222222222222222"
+          ],
+          "unreadable": []
+        },
+        "refused": false
+      },
+      {
+        "name": "an unreadable new record, unreadable again: the read is refused",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "11111111111111111111111111111111"
+        ],
+        "unreadable": [
+          "22222222222222222222222222222222"
+        ],
+        "held": [],
+        "missing": [
+          "22222222222222222222222222222222"
+        ],
+        "again": {
+          "returned": [],
+          "unreadable": [
+            "22222222222222222222222222222222"
+          ]
+        },
+        "refused": true
+      },
+      {
+        "name": "a held record re-sent unreadable is missing, and its held copy stands",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "22222222222222222222222222222222"
+        ],
+        "unreadable": [
+          "11111111111111111111111111111111"
+        ],
+        "held": [
+          "11111111111111111111111111111111"
+        ],
+        "missing": [
+          "11111111111111111111111111111111"
+        ],
+        "again": {
+          "returned": [
+            "11111111111111111111111111111111"
+          ],
+          "unreadable": []
+        },
+        "refused": false
+      },
+      {
+        "name": "a held record re-sent unreadable twice: the read is refused",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "22222222222222222222222222222222"
+        ],
+        "unreadable": [
+          "11111111111111111111111111111111"
+        ],
+        "held": [
+          "11111111111111111111111111111111"
+        ],
+        "missing": [
+          "11111111111111111111111111111111"
+        ],
+        "again": {
+          "returned": [],
+          "unreadable": [
+            "11111111111111111111111111111111"
+          ]
+        },
+        "refused": true
+      },
+      {
+        "name": "a held record re-sent unreadable, then left out: the read is refused",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "22222222222222222222222222222222"
+        ],
+        "unreadable": [
+          "11111111111111111111111111111111"
+        ],
+        "held": [
+          "11111111111111111111111111111111"
+        ],
+        "missing": [
+          "11111111111111111111111111111111"
+        ],
+        "again": {
+          "returned": [],
+          "unreadable": []
+        },
+        "refused": true
+      },
+      {
+        "name": "a withheld record left out again: the read is refused",
+        "manifest_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "returned": [
+          "11111111111111111111111111111111"
+        ],
+        "held": [],
+        "missing": [
+          "22222222222222222222222222222222"
+        ],
+        "again": {
+          "returned": [],
+          "unreadable": []
+        },
+        "refused": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,571 @@
+{
+  "_about": [
+    "Golden cases for the delete lane frame and for the rule that decides whether a delete may withdraw a message.",
+    "Normative: docs/sealed-messages.md §Deletes.",
+    "The deleter is never in the payload: it is the MLS sender, read from the decrypted credential. Parsing is strict JSON, as for reactions; an unknown extra key is ignored.",
+    "`encode` and `parse` cases pin the wire. `honor` cases pin the author check: `sender` is the delete's MLS sender; `record` is the sender this device recorded when it opened the target, or null when it holds none; `author` is the author the device otherwise knows for the row, or \"\" when it knows none.",
+    "With a `record`, honor exactly when `sender` equals it, whatever `author` says. With no record, honor exactly when `sender` equals `author`. With neither, refuse.",
+    "`pending` cases pin how waiting deletes are kept. Each is a list of steps: `marker` records a delete from `sender` for `messageId`; `target` asks whether the message is withdrawn now (`expect`), given its `record` and `author`. A true answer is followed by forgetting that id.",
+    "Deletes are kept per (message id, sender), so no sender can displace or block another. When the target is attributable (a record, or else a non-empty author), every kept sender is judged; any pass withdraws the message, and every sender that fails is dropped. When it is not, every delete waits.",
+    "The case's `pending` is what is left afterward: message id to sorted senders.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "cases": [
+    {
+      "id": "encode/one",
+      "why": "The whole wire: a tag, a version and the target. Nothing else.",
+      "call": "encode",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "keys": [
+        "m",
+        "peachy",
+        "v"
+      ],
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111"
+      }
+    },
+    {
+      "id": "parse/one",
+      "why": "The ordinary marker.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"del\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\"}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111"
+      }
+    },
+    {
+      "id": "parse/extra-key",
+      "why": "A key a later version adds is ignored, not fatal.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"del\",\"v\":1,\"m\":\"22222222-2222-2222-2222-222222222222\",\"z\":9}",
+      "expect": {
+        "messageId": "22222222-2222-2222-2222-222222222222"
+      }
+    },
+    {
+      "id": "parse/reaction",
+      "why": "Another payload on the same lane. Null, so the reaction reader gets it.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/receipt",
+      "why": "The other neighbor on the lane.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"11111111-1111-1111-1111-111111111111\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/version",
+      "why": "A version this build does not read is refused, never guessed at.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"del\",\"v\":2,\"m\":\"11111111-1111-1111-1111-111111111111\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-target",
+      "why": "A marker naming nothing deletes nothing.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"del\",\"v\":1,\"m\":\"\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/missing-target",
+      "why": "Same, with the field absent.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"del\",\"v\":1}",
+      "expect": null
+    },
+    {
+      "id": "parse/target-not-a-string",
+      "why": "A number is not a message id.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"del\",\"v\":1,\"m\":7}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-target",
+      "why": "Two `m`s would delete one message here and another there.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"del\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"m\":\"22222222-2222-2222-2222-222222222222\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-tag",
+      "why": "A duplicate key anywhere, not only the one that matters.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"peachy\":\"del\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/junk",
+      "why": "The lane carries anything; nothing on it may throw.",
+      "call": "parse",
+      "wire": "not json at all",
+      "expect": null
+    },
+    {
+      "id": "parse/array",
+      "why": "Valid JSON that is not an object.",
+      "call": "parse",
+      "wire": "[\"peachy\",\"del\"]",
+      "expect": null
+    },
+    {
+      "id": "honor/record-matches",
+      "why": "The author withdrew their own words, and this device wrote down who sent them.",
+      "call": "honor",
+      "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "expect": true
+    },
+    {
+      "id": "honor/record-matches-sealed-sender",
+      "why": "No author is known for the row; the recorded sender is the whole of it.",
+      "call": "honor",
+      "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "author": "",
+      "expect": true
+    },
+    {
+      "id": "honor/record-disagrees",
+      "why": "Another member's marker. The whole reason the rule exists.",
+      "call": "honor",
+      "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "expect": false
+    },
+    {
+      "id": "honor/record-beats-the-server",
+      "why": "The author known for the row agrees with the delete and the recorded sender does not. The record wins.",
+      "call": "honor",
+      "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "author": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "expect": false
+    },
+    {
+      "id": "honor/no-record-server-agrees",
+      "why": "No record here: the author known for the row stands in.",
+      "call": "honor",
+      "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "record": null,
+      "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "expect": true
+    },
+    {
+      "id": "honor/no-record-server-disagrees",
+      "why": "No record, and the author known for the row is somebody else.",
+      "call": "honor",
+      "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "record": null,
+      "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "expect": false
+    },
+    {
+      "id": "honor/nothing-to-check-against",
+      "why": "A sealed-sender row this device has never opened. Refused, and kept for later.",
+      "call": "honor",
+      "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "record": null,
+      "author": "",
+      "expect": false
+    },
+    {
+      "id": "honor/empty-sender",
+      "why": "A marker with no sender is no marker. Never honored, whatever the target says.",
+      "call": "honor",
+      "sender": "",
+      "record": null,
+      "author": "",
+      "expect": false
+    },
+    {
+      "id": "honor/empty-sender-empty-record",
+      "why": "Two empties are not a match.",
+      "call": "honor",
+      "sender": "",
+      "record": "",
+      "author": "",
+      "expect": false
+    },
+    {
+      "id": "pending/forged-first-then-author",
+      "why": "Another member's delete arrives first; the author's own delete, arriving second, must still withdraw the message when it is judged.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": true
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/forged-first-then-author-no-record",
+      "why": "The same race when only the author known for the row is available.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": null,
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": true
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/forged-against-a-present-target",
+      "why": "The target is already attributable when the forgery lands: it is refused and DROPPED, not kept, and the author's later marker still withdraws.",
+      "call": "pending",
+      "steps": [
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": false
+        },
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": false
+        },
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": true
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/forged-alone-is-dropped",
+      "why": "A forgery that meets an attributable target leaves nothing behind.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": false
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/forged-refused-when-record-beats-server",
+      "why": "The author known for the row sides with the forger and the record does not. Refused and dropped.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+          },
+          "expect": false
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/early-marker-waits-for-its-target",
+      "why": "The early-message cache: a marker that overtakes its target, or meets it before this device can attribute it, waits, and is honored when the author is known.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": null,
+            "author": ""
+          },
+          "expect": false
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": true
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/early-markers-from-two-senders-both-wait",
+      "why": "Neither marker can be judged against an unattributable target, so both wait; neither blocks the other.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": null,
+            "author": ""
+          },
+          "expect": false
+        }
+      ],
+      "pending": {
+        "11111111-1111-1111-1111-111111111111": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        ]
+      }
+    },
+    {
+      "id": "pending/early-forgery-waits-then-drops",
+      "why": "A forgery waits with the target unattributable, then is dropped once it is.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": null,
+            "author": ""
+          },
+          "expect": false
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": false
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/repeat-marker-is-one-entry",
+      "why": "The same sender naming the same message twice is one pending marker.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        }
+      ],
+      "pending": {
+        "11111111-1111-1111-1111-111111111111": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "id": "pending/honored-clears-every-sender",
+      "why": "Once withdrawn, nothing more is asked about the message: the forger's parked marker goes with it.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "marker": {
+            "sender": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": true
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": false
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/empty-sender-is-not-recorded",
+      "why": "A marker with no sender is no marker, and is not even written down.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": null,
+            "author": ""
+          },
+          "expect": false
+        }
+      ],
+      "pending": {}
+    },
+    {
+      "id": "pending/other-message-untouched",
+      "why": "A verdict about one message says nothing about another's markers.",
+      "call": "pending",
+      "steps": [
+        {
+          "marker": {
+            "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "messageId": "22222222-2222-2222-2222-222222222222"
+          }
+        },
+        {
+          "marker": {
+            "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "messageId": "11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": true
+        }
+      ],
+      "pending": {
+        "22222222-2222-2222-2222-222222222222": [
+          "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        ]
+      }
+    },
+    {
+      "id": "pending/no-marker-no-withdrawal",
+      "why": "A target nobody named is never withdrawn.",
+      "call": "pending",
+      "steps": [
+        {
+          "target": {
+            "messageId": "11111111-1111-1111-1111-111111111111",
+            "record": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "author": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "expect": false
+        }
+      ],
+      "pending": {}
+    }
+  ]
+}

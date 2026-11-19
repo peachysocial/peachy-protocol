@@ -1,0 +1,92 @@
+{
+  "_about": [
+    "Golden cases for when a disappearing message's countdown starts and when the message is deleted.",
+    "Normative: docs/sealed-messages.md §Disappearing messages.",
+    "The wire halves are pinned elsewhere: a message's own timer is `x` in payload.json, and the conversation's timer is `dis` in group-meta.json.",
+    "`maxSeconds` is the longest timer, 2,419,200 seconds (four weeks).",
+    "Each `expiry` case: every time is unix milliseconds. `outgoing` is whether the viewer wrote the message, on any of their devices. `timer` is the message's `x`. `sentAt` is the message's own time. `readAt` is when this device first showed it in an open, attended transcript (null: not yet). `noteAt` is the time of a read note from another of the viewer's devices (null: none). `now` is the clock.",
+    "`startedAt` is when the countdown started (null: not started) and `expiresAt` when the message is deleted (null: not scheduled).",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "version": 1,
+  "maxSeconds": 2419200,
+  "expiry": [
+    {
+      "name": "an outgoing message starts when it was sent",
+      "outgoing": true,
+      "timer": 30,
+      "sentAt": 1790000000000,
+      "readAt": null,
+      "noteAt": null,
+      "now": 1790000001000,
+      "startedAt": 1790000000000,
+      "expiresAt": 1790000030000
+    },
+    {
+      "name": "an incoming message not yet read has not started",
+      "outgoing": false,
+      "timer": 30,
+      "sentAt": 1790000000000,
+      "readAt": null,
+      "noteAt": null,
+      "now": 1790009999000,
+      "startedAt": null,
+      "expiresAt": null
+    },
+    {
+      "name": "an incoming message starts when this device showed it",
+      "outgoing": false,
+      "timer": 3600,
+      "sentAt": 1790000000000,
+      "readAt": 1790000500000,
+      "noteAt": null,
+      "now": 1790000600000,
+      "startedAt": 1790000500000,
+      "expiresAt": 1790004100000
+    },
+    {
+      "name": "another device of mine read it first: its note's time",
+      "outgoing": false,
+      "timer": 300,
+      "sentAt": 1790000000000,
+      "readAt": null,
+      "noteAt": 1790000100000,
+      "now": 1790000200000,
+      "startedAt": 1790000100000,
+      "expiresAt": 1790000400000
+    },
+    {
+      "name": "a note stamped in the future is clamped to now",
+      "outgoing": false,
+      "timer": 300,
+      "sentAt": 1790000000000,
+      "readAt": null,
+      "noteAt": 1790000900000,
+      "now": 1790000200000,
+      "startedAt": 1790000200000,
+      "expiresAt": 1790000500000
+    },
+    {
+      "name": "the earlier of this device's read and the note wins",
+      "outgoing": false,
+      "timer": 60,
+      "sentAt": 1790000000000,
+      "readAt": 1790000300000,
+      "noteAt": 1790000100000,
+      "now": 1790000400000,
+      "startedAt": 1790000100000,
+      "expiresAt": 1790000160000
+    },
+    {
+      "name": "a message with no timer never starts",
+      "outgoing": true,
+      "timer": 0,
+      "sentAt": 1790000000000,
+      "readAt": null,
+      "noteAt": null,
+      "now": 1790000001000,
+      "startedAt": null,
+      "expiresAt": null
+    }
+  ]
+}

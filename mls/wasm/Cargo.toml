@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: MIT
+[package]
+name = "peachy-mls-wasm"
+description = "The wasm-bindgen binding over peachy-mls-core, for the web client: one MlsClient class, bytes as Uint8Array, structured results as plain objects."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+# `cdylib` is what wasm-pack links; `rlib` so the crate's own integration tests
+# (tests/journey.rs) can link it like a normal Rust library. Without the rlib,
+# `wasm-pack test --node` has nothing to `use`.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# Mirrors `peachy-mls-core/test-issuer`: exports a `TestIssuer` class so a test
+# — Rust-side or JS-side — can mint a `pdc1` credential without a server. OFF
+# by default, so the `pkg/` bundle the web client would load contains no code
+# that can sign a credential. `pkg-node/` (tests only) is built with it on.
+test-issuer = ["peachy-mls-core/test-issuer"]
+# Mirrors `peachy-mls-core/fixture`: exports `evaluateFixtureCase`, the
+# JSON-in / JSON-out door `mls/wasm/tests/node/rules.test.mjs` and
+# `mls/wasm/tests/node/credentials.test.mjs` replay `mls/fixtures/rules.json`
+# and `mls/fixtures/credentials.json` through. Its own feature rather than a
+# second meaning for `test-issuer`, so each one names exactly one door — the
+# shipped `pkg/` bundle carries neither. Note `fixture` now implies
+# `peachy-mls-core/test-issuer`, because a credential case mints.
+fixture = ["peachy-mls-core/fixture"]
+# Mirrors `peachy-mls-core/development-keys`: the `development` set of carried
+# server keys, whose seed is public. Bundles for local development and testing
+# turn it on; the `pkg/` bundle a site ships leaves it off and carries an
+# empty set.
+development-keys = ["peachy-mls-core/development-keys"]
+
+[dependencies]
+peachy-mls-core = { path = "../core" }
+wasm-bindgen = { workspace = true }
+# See the comment on this pin in `mls/Cargo.toml`: the `#[wasm_bindgen]` macro
+# emits a path into it for every `async fn`, so it is linked rather than used.
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde-wasm-bindgen = { workspace = true }
+serde_bytes = { workspace = true }
+ed25519-dalek = { workspace = true }
+# Used directly by `generateSigningKeySeed`. On the host this needs no features
+# at all; the wasm32 opt-in is below.
+getrandom = { workspace = true }
+# Wipes the seed vector `MlsClient.open` is handed. Already in the graph
+# through the core.
+zeroize = { workspace = true }
+
+# ---- Randomness on wasm32-unknown-unknown ------------------------------------
+#
+# `getrandom` refuses `wasm32-unknown-unknown` unless the TOP-LEVEL crate says
+# which JavaScript interface to use — from the target triple alone it cannot
+# know whether JS even exists. A library must not make that choice, so the
+# choice lands here, in the only crate that knows it is being compiled for a
+# browser.
+#
+# BOTH lines of getrandom are in this dependency graph and they need different
+# opt-ins, so both are named (`cargo tree -p peachy-mls-core -i getrandom@0.2.17`
+# and `@0.4.3`):
+#
+#  - 0.4.3 reaches us through `rand` 0.10 (hpke-rs' RNG) and `crypto-common`
+#    0.2. Its opt-in is the `wasm_js` crate FEATURE and nothing else — in 0.4
+#    the JS backend is selected by `#[cfg(feature = "wasm_js")]` in
+#    `src/backends.rs`, not by the `getrandom_backend` cfg that 0.3 required.
+#    That is why neither `mls/.cargo/config.toml` (it sets only the x86 GHASH
+#    backend) nor anything else in this repo passes
+#    `RUSTFLAGS='--cfg getrandom_backend="wasm_js"'`: on
+#    0.4 that flag selects an *opt-in* backend (linux_getrandom, rdrand,
+#    custom…) and naming a backend that is not one is a build error, not a
+#    no-op. If the pin ever moves back to 0.3, the flag comes back with it.
+#  - 0.2.17 reaches us through `rand_core` 0.6 (elliptic-curve, crypto-common
+#    0.1). Its opt-in is the `js` feature.
+#
+# Neither getrandom entry is `use`d by this crate's code. They exist so cargo's
+# feature unification turns the backend on for the copies OpenMLS' provider
+# actually calls; deleting them as "unused" compiles on the host and fails on
+# wasm32 with "the wasm_js feature must be enabled".
+#
+# `openmls/js` is the third of them and the one a reader will not guess: on
+# wasm32 OpenMLS 0.9 reads the clock through `web_time` instead of
+# `std::time::SystemTime` (key-package lifetimes, message-secret ages), and that
+# dependency is optional behind its own `js` feature. Without it the build fails
+# five times over with "unresolved import `web_time`" from inside OpenMLS, which
+# reads as a broken dependency rather than as a missing opt-in. Enabling it here
+# also switches OpenMLS' own getrandom to `wasm_js`; the line above is kept
+# anyway, because this crate calls `getrandom::fill` itself.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["wasm_js"] }
+getrandom_02 = { package = "getrandom", version = "=0.2.17", features = ["js"] }
+openmls = { workspace = true, features = ["js"] }
+
+[dev-dependencies]
+wasm-bindgen-test = { workspace = true }
+# The crate's own tests mint credentials, so they need the issuer on.
+peachy-mls-wasm = { path = ".", features = ["test-issuer", "fixture"] }

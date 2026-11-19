@@ -1,0 +1,360 @@
+{
+  "_about": [
+    "Golden cases for the typing frame, byte for byte.",
+    "Normative: docs/sealed-messages.md §Typing inside the group.",
+    "The plaintext is `{\"peachy\":\"typing\",\"t\":…,\"u\":…,\"v\":1}` with the keys in exactly that order and no whitespace, NUL-padded to a multiple of `block` bytes. The key is MLS-Exporter(`label`, context = group id, 32). The wire is a `nonceBytes`-byte nonce followed by AES-256-GCM of the padded plaintext with no additional data.",
+    "Parsing is strict JSON, as for reactions; a reader does not care about key order, and an unknown extra key is ignored.",
+    "`encode` gives a frame, the exact keys the wire carries, and what parsing it back gives. `parse` gives a wire string and what a reader reads out of it, or null. `seal` gives a key, a nonce and a frame and the exact bytes of the wire, in hex. `open` gives a key and wire bytes and what comes out, or null for a frame that does not authenticate.",
+    "`cases` pin the frame codec, the signed frame without `g` and `s`. A frame is signed and stamped (`signedCases`): `{\"g\":…,\"peachy\":\"typing\",\"s\":…,\"t\":…,\"u\":…,\"v\":1}`, two blocks. `s` is the sender's clock in milliseconds, strictly increasing; `g` is standard base64 of the 64-byte Ed25519 signature by the sender's leaf key over \"peachy typing signature v1\" || 0x00 || u32be length || group id || u64be epoch || the frame without `g`. `g` and `s` come together or not at all.",
+    "A reader drops a signed frame unless a leaf of the person `u` names signed it, drops a stamp more than 120 seconds from its own clock or one it already took from that leaf, and drops every frame without `g` and `s`.",
+    "`signedCases`: `sign` gives a leaf key's seed, a group, an epoch and a frame, and the public key, the signed statement (hex) and the wire; `verify` gives a public key, a group, an epoch and a wire, and whether the signature holds; `parse` as above, with `stampMs` and `signature` (hex) in what a reader reads; `constants` the frame's constants.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "block": 128,
+  "nonceBytes": 12,
+  "label": "peachy typing v1",
+  "cases": [
+    {
+      "id": "encode/start",
+      "why": "A composer says it is still composing.",
+      "call": "encode",
+      "typing": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": true
+      },
+      "keys": [
+        "peachy",
+        "t",
+        "u",
+        "v"
+      ],
+      "expect": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": true
+      }
+    },
+    {
+      "id": "encode/stop",
+      "why": "An explicit stop: sent, cleared the field, left the thread.",
+      "call": "encode",
+      "typing": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": false
+      },
+      "keys": [
+        "peachy",
+        "t",
+        "u",
+        "v"
+      ],
+      "expect": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": false
+      }
+    },
+    {
+      "id": "parse/start",
+      "why": "The ordinary frame.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":1,\"u\":\"11111111-1111-1111-1111-111111111111\",\"t\":true}",
+      "expect": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": true
+      }
+    },
+    {
+      "id": "parse/stop",
+      "why": "The stop.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":1,\"u\":\"11111111-1111-1111-1111-111111111111\",\"t\":false}",
+      "expect": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": false
+      }
+    },
+    {
+      "id": "parse/extra-key",
+      "why": "A later version may say more; this one reads what it knows.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":1,\"u\":\"11111111-1111-1111-1111-111111111111\",\"t\":true,\"x\":9}",
+      "expect": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": true
+      }
+    },
+    {
+      "id": "parse/another-tag",
+      "why": "A receipt shares nothing with this but the lane it might one day share.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"11111111-1111-1111-1111-111111111111\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/wrong-version",
+      "why": "A version this build does not read is not a frame it may guess at.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":2,\"u\":\"11111111-1111-1111-1111-111111111111\",\"t\":true}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-actor",
+      "why": "Nothing else names the composer, so a frame without one says nothing.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":1,\"t\":true}",
+      "expect": null
+    },
+    {
+      "id": "parse/empty-actor",
+      "why": "An empty actor is not an actor.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":1,\"u\":\"\",\"t\":true}",
+      "expect": null
+    },
+    {
+      "id": "parse/string-flag",
+      "why": "\"false\" is truthy in some of the languages that read this. Booleans only.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":1,\"u\":\"11111111-1111-1111-1111-111111111111\",\"t\":\"false\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-flag",
+      "why": "Two `t`s read start on one client and stop on another. Refuse both.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"v\":1,\"u\":\"11111111-1111-1111-1111-111111111111\",\"t\":true,\"t\":false}",
+      "expect": null
+    },
+    {
+      "id": "parse/not-json",
+      "why": "Anything else that reaches the opener.",
+      "call": "parse",
+      "wire": "typing",
+      "expect": null
+    },
+    {
+      "id": "seal/start",
+      "why": "The exact bytes a start is, with the key and nonce pinned.",
+      "call": "seal",
+      "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "nonce": "0b0b0b0b0b0b0b0b0b0b0b0b",
+      "typing": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": true
+      },
+      "frame": "0b0b0b0b0b0b0b0b0b0b0b0bd3ac62c4ee0fe5d0f9f339cbdc38bcf6c8d324303a61c261c86b8543aadef4ddea4573597df372ea797a424b5bf0603916aaf4464abe481baf5ab2389a15814c749a4146a897a74e5839be38eeab71d1ec541d1e2b9f662f13a8590b6fcf11b53f6c31d04861dba454856963224e2f7a77d6efa7db18c9928e206e7ab8e26bec217f37ea702cfccc9b0f5bb63ff7072d"
+    },
+    {
+      "id": "seal/stop",
+      "why": "Same key, same nonce, one byte of JSON different - and the SAME LENGTH, which is the padding's whole job.",
+      "call": "seal",
+      "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "nonce": "0b0b0b0b0b0b0b0b0b0b0b0b",
+      "typing": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": false
+      },
+      "frame": "0b0b0b0b0b0b0b0b0b0b0b0bd3ac62c4ee0fe5d0f9f339cbdc38bcf6c8d324303a61c273db72930aa489a3c5f25673597df372ea79665e4b5bf07c2516aaf45a56be481bb346b2389a15814c749a4146a884a9400c6da633a2d671d1ec541d1e2b9f662f13a8590b6fcf11b53f6c31d04861dba454856963224e2f7a77d6efa7db18c9928e206e7ab8e26bec680124594656cf8987bf71a19647d079"
+    },
+    {
+      "id": "seal/other-epoch",
+      "why": "A different epoch's key derives a different frame for the same words.",
+      "call": "seal",
+      "key": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "nonce": "1c1c1c1c1c1c1c1c1c1c1c1c",
+      "typing": {
+        "actorId": "22222222-2222-2222-2222-222222222222",
+        "typing": true
+      },
+      "frame": "1c1c1c1c1c1c1c1c1c1c1c1c258ca5bc2d5f8c392f1ef4ef0ddb1ca9c4ee171dbd1f25c633fe4b34fd2766ffa7d01a78ab7967a9579320facf7e94699b914daee396d362c818e68cae8c60dd4a971c24459ad0d79c491f974a686655835fdc5c31d11dae6444dc5a13a61d5e48f73a6c69b7302e1a68a34c9f7f11a6e88e7fe27a68f0d4e9706e315dd376db1d8a7f35ac4f69fa11535aff929dfaf2"
+    },
+    {
+      "id": "open/start",
+      "why": "The receiving half of seal/start.",
+      "call": "open",
+      "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "frame": "0b0b0b0b0b0b0b0b0b0b0b0bd3ac62c4ee0fe5d0f9f339cbdc38bcf6c8d324303a61c261c86b8543aadef4ddea4573597df372ea797a424b5bf0603916aaf4464abe481baf5ab2389a15814c749a4146a897a74e5839be38eeab71d1ec541d1e2b9f662f13a8590b6fcf11b53f6c31d04861dba454856963224e2f7a77d6efa7db18c9928e206e7ab8e26bec217f37ea702cfccc9b0f5bb63ff7072d",
+      "expect": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": true
+      }
+    },
+    {
+      "id": "open/wrong-key",
+      "why": "A frame from an epoch this device has moved past. Null, not an error - it is the ordinary answer on a lane anybody may relay into.",
+      "call": "open",
+      "key": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "frame": "0b0b0b0b0b0b0b0b0b0b0b0bd3ac62c4ee0fe5d0f9f339cbdc38bcf6c8d324303a61c261c86b8543aadef4ddea4573597df372ea797a424b5bf0603916aaf4464abe481baf5ab2389a15814c749a4146a897a74e5839be38eeab71d1ec541d1e2b9f662f13a8590b6fcf11b53f6c31d04861dba454856963224e2f7a77d6efa7db18c9928e206e7ab8e26bec217f37ea702cfccc9b0f5bb63ff7072d",
+      "expect": null
+    },
+    {
+      "id": "open/tampered",
+      "why": "One flipped byte in the tag. GCM refuses it; so must every client.",
+      "call": "open",
+      "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "frame": "0b0b0b0b0b0b0b0b0b0b0b0bd3ac62c4ee0fe5d0f9f339cbdc38bcf6c8d324303a61c261c86b8543aadef4ddea4573597df372ea797a424b5bf0603916aaf4464abe481baf5ab2389a15814c749a4146a897a74e5839be38eeab71d1ec541d1e2b9f662f13a8590b6fcf11b53f6c31d04861dba454856963224e2f7a77d6efa7db18c9928e206e7ab8e26bec217f37ea702cfccc9b0f5bb63ff7072c",
+      "expect": null
+    },
+    {
+      "id": "open/too-short",
+      "why": "Nothing but a nonce. Not a frame.",
+      "call": "open",
+      "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "frame": "0b0b0b0b0b0b0b0b0b0b0b0b",
+      "expect": null
+    }
+  ],
+  "signedCases": [
+    {
+      "id": "sign/start",
+      "why": "The signed frame: `g` first, then the frame's keys, `s` between `peachy` and `t`. The signature is the leaf key's over the statement.",
+      "kind": "typing",
+      "call": "sign",
+      "seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+      "groupId": "g1",
+      "epoch": 7,
+      "frame": {
+        "actorId": "11111111-1111-1111-1111-111111111111",
+        "typing": true,
+        "stampMs": 1761955200000
+      },
+      "expect": {
+        "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "statement": "70656163687920747970696e67207369676e61747572652076310000000002673100000000000000077b22706561636879223a22747970696e67222c2273223a313736313935353230303030302c2274223a747275652c2275223a2231313131313131312d313131312d313131312d313131312d313131313131313131313131222c2276223a317d",
+        "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200000,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}"
+      }
+    },
+    {
+      "id": "parse/signed",
+      "why": "What a reader takes from a signed frame before it checks the signature.",
+      "kind": "typing",
+      "call": "parse",
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200000,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "frame": {
+          "actorId": "11111111-1111-1111-1111-111111111111",
+          "typing": true,
+          "stampMs": 1761955200000,
+          "signature": "82153518c73c7474e1300a028952585f24e8732f46fb0ef6c2c3d013677f9673b389bcf63f0905375a9d4332e813b5e902c1c501876626d7797777a232759200"
+        }
+      }
+    },
+    {
+      "id": "verify/holds",
+      "why": "The leaf's key, the group and the epoch it was signed in.",
+      "kind": "typing",
+      "call": "verify",
+      "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "groupId": "g1",
+      "epoch": 7,
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200000,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "holds": true
+      }
+    },
+    {
+      "id": "verify/another-epoch",
+      "why": "A frame is signed for one epoch.",
+      "kind": "typing",
+      "call": "verify",
+      "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "groupId": "g1",
+      "epoch": 8,
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200000,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "holds": false
+      }
+    },
+    {
+      "id": "verify/another-group",
+      "why": "And for one group.",
+      "kind": "typing",
+      "call": "verify",
+      "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "groupId": "g2",
+      "epoch": 7,
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200000,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "holds": false
+      }
+    },
+    {
+      "id": "verify/restamped",
+      "why": "The stamp is signed: a replay cannot be given a fresh one.",
+      "kind": "typing",
+      "call": "verify",
+      "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "groupId": "g1",
+      "epoch": 7,
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200001,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "holds": false
+      }
+    },
+    {
+      "id": "verify/flipped",
+      "why": "Nor can a start be turned into a stop.",
+      "kind": "typing",
+      "call": "verify",
+      "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "groupId": "g1",
+      "epoch": 7,
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200000,\"t\":false,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "holds": false
+      }
+    },
+    {
+      "id": "parse/signature-without-stamp",
+      "why": "`g` and `s` come together or not at all.",
+      "kind": "typing",
+      "call": "parse",
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "frame": null
+      }
+    },
+    {
+      "id": "parse/unsigned-stamped",
+      "why": "An `s` without `g` is refused too.",
+      "kind": "typing",
+      "call": "parse",
+      "wire": "{\"peachy\":\"typing\",\"s\":1761955200000,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "frame": null
+      }
+    },
+    {
+      "id": "parse/fractional-stamp",
+      "why": "A stamp is a whole number of milliseconds.",
+      "kind": "typing",
+      "call": "parse",
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWSAA==\",\"peachy\":\"typing\",\"s\":1761955200000.5,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "frame": null
+      }
+    },
+    {
+      "id": "parse/short-signature",
+      "why": "A signature is 64 bytes.",
+      "kind": "typing",
+      "call": "parse",
+      "wire": "{\"g\":\"ghU1GMc8dHThMAoCiVJYXyTocy9G+w72wsPQE2d/lnOzibz2PwkFN1qdQzLoE7XpAsHFAYdmJtd5d3eiMnWS\",\"peachy\":\"typing\",\"s\":1761955200000,\"t\":true,\"u\":\"11111111-1111-1111-1111-111111111111\",\"v\":1}",
+      "expect": {
+        "frame": null
+      }
+    },
+    {
+      "id": "constants",
+      "why": "The frame's constants.",
+      "kind": "typing",
+      "call": "constants",
+      "expect": {
+        "label": "peachy typing v1",
+        "block": 128,
+        "nonceBytes": 12,
+        "signatureDomain": "peachy typing signature v1",
+        "maxSkewMs": 120000
+      }
+    }
+  ]
+}

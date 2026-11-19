@@ -1,0 +1,2022 @@
+{
+  "version": 1,
+  "about": [
+    "The golden fixture for a member-rostered conversation: its handle, the envelope",
+    "that hides which conversation a sealed byte belongs to, and the group policy",
+    "every member's device enforces (mls/core/src/envelope.rs, mls/core/src/policy.rs).",
+    "Written by an independent implementation (Python's hashlib and cryptography), so",
+    "the Rust replay is a second opinion and not the author checking itself.",
+    "Replayed through the fixture door (kind \"roster\") in Rust, JavaScript and Swift",
+    "(and, in Peachy's Android client, Kotlin). See docs/delivery.md §Handles and sender-addressed delivery.",
+    "A judge case's leaf is an actor id or {actor, device, accountKey, deviceKey}; `kept` and `reader`, when present, feed the one-account-key rule, judged after the group's policy.",
+    "Envelope versions: version 2 (padded) is keyed by the group id, and is what a seat ask and a link preview are sealed as; version 3 is the padded layout keyed by one epoch's envelope secret (`epochSecretHex` / `epochSecretsHex`), what everything else is sealed as. A `seal` case with no `epochSecretHex` seals version 2. Any other version byte is refused (docs/delivery.md §The wrapped envelope).",
+    "A reseat compares actor, device and account key; the same device under another deviceKey is still a reseat to the policy, and the adder and every receiver refuse it on their own.",
+    "A judge case judges the commit as its committer and every receiver do. A meta that names no readable policy is a group with no admin, each unreadable part closed. No meta at all (a call link's group) is not judged."
+  ],
+  "cases": [
+    {
+      "id": "handle-11111111",
+      "kind": "roster",
+      "call": "handle",
+      "groupId": "11111111-1111-4111-8111-111111111111",
+      "expect": {
+        "handleHex": "82e34558853d8a1d2d9a2f84db0f092338b8f6c1fd25736c7bd032d7557e2e34"
+      }
+    },
+    {
+      "id": "handle-22222222",
+      "kind": "roster",
+      "call": "handle",
+      "groupId": "22222222-2222-4222-8222-222222222222",
+      "expect": {
+        "handleHex": "b3cf731c02c15b31fa933aa85a960f6f5108837511fdd6b75d191330fa618a54"
+      }
+    },
+    {
+      "id": "seal-message",
+      "kind": "roster",
+      "call": "seal",
+      "groupId": "11111111-1111-4111-8111-111111111111",
+      "envelopeKind": 1,
+      "innerHex": "68656c6c6f",
+      "nonceHex": "000102030405060708090a0b",
+      "expect": {
+        "envelopeHex": "02000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e4dcd644ef1d33e394d901d05290b7b5cce0f22d13d10ffb0d5ee543c4ce7e8e7d6844b949b87857ce4f215e53f1fc33e7e79604ffd0e48cbb1c98fb62d94ca1929eeaa7eea0fbd2ec4d0955daf0a18799ad807a6bcf05e9bc02c40ae63c96094fbe6cc11ef9be5b54f75916eb455b772fe9ad700c233eb7e9a54e07eeabb7729791da958cef19687f1ff390bdee6ce76ec2581fa0b2ccc64568faf6e9d56d7ff9aa86bac0d5bd7b22ae449d8fc35b52f453149c61766fbfd5a9aace3f4716d5f7505dc85005d1954620e73d29dca25bb7978f01976599e2072b4a030ddbc2aaacdaa36aeb3922f3d47cb2b17aac4637fd2c54e15b708e227d2d16678bf661d34bac9f9ca44ba11c1582b32664c7ceef96022e54e8d7dbecec220d4374a4b81da58913c8fe9ef10239437f29e3c0e8b1db7a45efa6e0d0ac407cc4e79a4a8588098f58c5f15d8e0c1b98820f8a74cacb08e7d25682ccbe7e88cbf8a7bf885a0e0065a194bf20796a74a52c373c9d87628524c17d507d5776ea54ccb8d5ca23c95135c0682576f93134db751f951d5b7d823087aa31f85d8aebbd2e760a246ca2b9a336f917ed3257b6eb370c7bc7d889aea5dcee77fa0fbc40d10c8021128cd420090bc513a2b7957f995315cb8493fd8a436d5262992b3dd634065dde0c6b37ac7949"
+      }
+    },
+    {
+      "id": "seal-commit",
+      "kind": "roster",
+      "call": "seal",
+      "groupId": "11111111-1111-4111-8111-111111111111",
+      "envelopeKind": 2,
+      "innerHex": "deadbeef",
+      "nonceHex": "ffffffffffffffffffffffff",
+      "expect": {
+        "envelopeHex": "02ffffffffffffffffffffffffae8aeb0995457bb116a384db9741e146d8147b93243584761036ed00230f5fade4e91e0fff3f6a79d31f4abb60950a8310bfed767c4dce7ce5ba3f135aab47076f46c958619224e58b9bb40f4e34d6419a746fdea7112150415f150ebd2e0695298c5a378c0e62a6dae2a8cb40dca3a5ec7ae245a7db8328a79d63ed65b254655f50f47be90b16527a5915fc0bdeac480f6d6f42ccf9672686697dee60d6b9289d31da16b1b54b106625eaf384ad7a6397ed56706d5b69b423a32954f85109aae407dc986ee0f62623a11b6cb4a819133db6566fb4df4fc3186e3020b8938de3cbc97ca0541de1863e40a4b4a19f717222555e9854d0c533b70ad2de80022a7acc9a1e01ef37fabf0781c2ec542ac12a1fb7fe282abd436731462bd1d2a1e1db55552a9f383a6c1dd231bf71c657fec990138c9ab4be84b09c997b9878134b8e68b696475868363fa4cd4b79892e8604eeb45d9e16b87a2effacbd704fa94a1814e0c03680724c8a6dd30320fb28dbc12bb7885d5544b6807ce58c81fff8474efb61309e2dbd571011312c9b908be5de7bf128db1af9e9d4b929c44319718fbc70ad74fd175030303888ad28148a1ee8e15a9d8b28634749084a50b01e1318ac8a8cc8a310936e030b03a601d9ce8264a189698bb2c645e36aed9eb7e7b9d67f2d79851b648fc9fac2abd0512f70afed4faf9f"
+      }
+    },
+    {
+      "id": "seal-seat-ask",
+      "kind": "roster",
+      "call": "seal",
+      "groupId": "22222222-2222-4222-8222-222222222222",
+      "envelopeKind": 3,
+      "innerHex": "7b2264223a22646576222c2261223a22616374227d",
+      "nonceHex": "000102030405060708090a0b",
+      "expect": {
+        "envelopeHex": "02000102030405060708090a0b01ea6f7586a6a8c25574838770304da281bc43b413d2b4c70538983d5ba4f7ec82897ed51bbad12ebc2ee45be319db287523e0ac16a5dc291f9a87e31c0aaa43001280a4d8897340f20fc153f4ac8c6ce2774dff51de699d175048936926d94be4efac05789d2723b4f36ac570d31c2c9dbd5f889736712c98438296a5639d5ea81681ad633377174a3cb1d48011769cd3ebdac9badb892370346ae887e33c15c48cedfb35c472d19441f99ba4039c6ed6514a348ed933a9ae208fbf4a3b2b2fd70760a39ebe7a2ebab06785931c444f88a15162f9f8a973e96a1189b8f1abb9b4416f94f454bd7a067dd6e800a33bb4dd071863e03960ad72dab1cd84f4a121bb4337efc402a454810d749bde97e53cb68b59da9b7fd6312c5932d63b2b245b603f7ee700910c62b988b19afc313e3285eb53ca7a67e5d0b72ad2b411ae76e5788d759734d9a4f24a2106c02e4eeee9354929b3c588d3949fe2dc40be7e991073a4f44da53d8df7f89536f6c965a4da4471b38883010d01630015a676083414afbb6f8b29e9b2e5306e426a646e7c690abb62a4014a2d54826002cbb0d4ae1272333dbd66393fd9913bc9b33475bd2daba9fcd5b49907bd31de77298613acd04fd283db95934c4e0ddca973ebb1d3a598b251cbe5387d462ac00517904fd17853ccdcbcbf5ca9c8c0c6c1b67c0b489bfb57da"
+      }
+    },
+    {
+      "id": "seal-typing-empty",
+      "kind": "roster",
+      "call": "seal",
+      "groupId": "22222222-2222-4222-8222-222222222222",
+      "envelopeKind": 4,
+      "innerHex": "",
+      "nonceHex": "ffffffffffffffffffffffff",
+      "expect": {
+        "envelopeHex": "02ffffffffffffffffffffffff0bd368d9dddf3a878fd0b61942a6101e5c13d6afff5c6b500cec2433ad1e933691469b7ebf1c1dc3ce16287c734da24447fdf8d8962a9cdc92743a7c67b4ce4a11200c2acf539d86b0fccd4039bf2d0d9bd88ba084dff9944e13166d408b6087988cff7b1cf2a327b5a053126663419d54eff68fd3673ed29a3a11fba595b8447cca67c54f4a54bd8d4df2ee1158c8ada3df50e20d49a4db2d71b40c499d09daed9fd64240f71037eea463704631ceef1ca96e3b3841f0936f4a93024950403f54b324b3acf3f485a63a4993db6bce33baa9d6d707cc15e64bd401cff380e19fa6e5d8e8639f468826a6c6ff5cffb78275cf06357118801ae4b72db0b7f53de0c9c15c7474f9541b19b2ba65d0f7f4bc839eaee1bbb78065cb563320a4ad56ce2073a8d2cd3385929e634cac7465dbbf44240fb0b7638ca8fc547bd2a54f01f9238f403888bb71ad4ddb8483c710697aed34e328e109466b86d765955c7ae59b488475ea24798228f1a8ab93c5a495c458a3273e03e6a448e11fbb8333ccfada3cff75ac55bb71d43b293897885e003a8b8ed33b94354d0f4f7e471455836fd6b49ebbc68437835059bd6af0ac7e3bb64d12e0722379da460f3b7ce38f7f7012e30339ad8d8fba15c6fcc84866e5a01803e58b45c9f4cb9ecfb010b2495c57843b4e98cbebfe2d19a7c4492f6e40de1cf3c28d"
+      }
+    },
+    {
+      "id": "open-finds-its-group",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "22222222-2222-4222-8222-222222222222",
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "envelopeHex": "02000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e4dcd644ef1d33e394d901d05290b7b5cce0f22d13d10ffb0d5ee543c4ce7e8e7d6844b949b87857ce4f215e53f1fc33e7e79604ffd0e48cbb1c98fb62d94ca1929eeaa7eea0fbd2ec4d0955daf0a18799ad807a6bcf05e9bc02c40ae63c96094fbe6cc11ef9be5b54f75916eb455b772fe9ad700c233eb7e9a54e07eeabb7729791da958cef19687f1ff390bdee6ce76ec2581fa0b2ccc64568faf6e9d56d7ff9aa86bac0d5bd7b22ae449d8fc35b52f453149c61766fbfd5a9aace3f4716d5f7505dc85005d1954620e73d29dca25bb7978f01976599e2072b4a030ddbc2aaacdaa36aeb3922f3d47cb2b17aac4637fd2c54e15b708e227d2d16678bf661d34bac9f9ca44ba11c1582b32664c7ceef96022e54e8d7dbecec220d4374a4b81da58913c8fe9ef10239437f29e3c0e8b1db7a45efa6e0d0ac407cc4e79a4a8588098f58c5f15d8e0c1b98820f8a74cacb08e7d25682ccbe7e88cbf8a7bf885a0e0065a194bf20796a74a52c373c9d87628524c17d507d5776ea54ccb8d5ca23c95135c0682576f93134db751f951d5b7d823087aa31f85d8aebbd2e760a246ca2b9a336f917ed3257b6eb370c7bc7d889aea5dcee77fa0fbc40d10c8021128cd420090bc513a2b7957f995315cb8493fd8a436d5262992b3dd634065dde0c6b37ac7949",
+      "expect": {
+        "opened": true,
+        "groupId": "11111111-1111-4111-8111-111111111111",
+        "envelopeKind": 1,
+        "innerHex": "68656c6c6f"
+      }
+    },
+    {
+      "id": "open-seat-ask",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222"
+      ],
+      "envelopeHex": "02000102030405060708090a0b01ea6f7586a6a8c25574838770304da281bc43b413d2b4c70538983d5ba4f7ec82897ed51bbad12ebc2ee45be319db287523e0ac16a5dc291f9a87e31c0aaa43001280a4d8897340f20fc153f4ac8c6ce2774dff51de699d175048936926d94be4efac05789d2723b4f36ac570d31c2c9dbd5f889736712c98438296a5639d5ea81681ad633377174a3cb1d48011769cd3ebdac9badb892370346ae887e33c15c48cedfb35c472d19441f99ba4039c6ed6514a348ed933a9ae208fbf4a3b2b2fd70760a39ebe7a2ebab06785931c444f88a15162f9f8a973e96a1189b8f1abb9b4416f94f454bd7a067dd6e800a33bb4dd071863e03960ad72dab1cd84f4a121bb4337efc402a454810d749bde97e53cb68b59da9b7fd6312c5932d63b2b245b603f7ee700910c62b988b19afc313e3285eb53ca7a67e5d0b72ad2b411ae76e5788d759734d9a4f24a2106c02e4eeee9354929b3c588d3949fe2dc40be7e991073a4f44da53d8df7f89536f6c965a4da4471b38883010d01630015a676083414afbb6f8b29e9b2e5306e426a646e7c690abb62a4014a2d54826002cbb0d4ae1272333dbd66393fd9913bc9b33475bd2daba9fcd5b49907bd31de77298613acd04fd283db95934c4e0ddca973ebb1d3a598b251cbe5387d462ac00517904fd17853ccdcbcbf5ca9c8c0c6c1b67c0b489bfb57da",
+      "expect": {
+        "opened": true,
+        "groupId": "22222222-2222-4222-8222-222222222222",
+        "envelopeKind": 3,
+        "innerHex": "7b2264223a22646576222c2261223a22616374227d"
+      }
+    },
+    {
+      "id": "open-not-a-member",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "22222222-2222-4222-8222-222222222222"
+      ],
+      "envelopeHex": "02000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e4dcd644ef1d33e394d901d05290b7b5cce0f22d13d10ffb0d5ee543c4ce7e8e7d6844b949b87857ce4f215e53f1fc33e7e79604ffd0e48cbb1c98fb62d94ca1929eeaa7eea0fbd2ec4d0955daf0a18799ad807a6bcf05e9bc02c40ae63c96094fbe6cc11ef9be5b54f75916eb455b772fe9ad700c233eb7e9a54e07eeabb7729791da958cef19687f1ff390bdee6ce76ec2581fa0b2ccc64568faf6e9d56d7ff9aa86bac0d5bd7b22ae449d8fc35b52f453149c61766fbfd5a9aace3f4716d5f7505dc85005d1954620e73d29dca25bb7978f01976599e2072b4a030ddbc2aaacdaa36aeb3922f3d47cb2b17aac4637fd2c54e15b708e227d2d16678bf661d34bac9f9ca44ba11c1582b32664c7ceef96022e54e8d7dbecec220d4374a4b81da58913c8fe9ef10239437f29e3c0e8b1db7a45efa6e0d0ac407cc4e79a4a8588098f58c5f15d8e0c1b98820f8a74cacb08e7d25682ccbe7e88cbf8a7bf885a0e0065a194bf20796a74a52c373c9d87628524c17d507d5776ea54ccb8d5ca23c95135c0682576f93134db751f951d5b7d823087aa31f85d8aebbd2e760a246ca2b9a336f917ed3257b6eb370c7bc7d889aea5dcee77fa0fbc40d10c8021128cd420090bc513a2b7957f995315cb8493fd8a436d5262992b3dd634065dde0c6b37ac7949",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-tampered",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "envelopeHex": "02ffffffffffffffffffffffffae8aeb0995457bb116a384db9741e146d8147b93243584761036ed00230f5fade4e91e0fff3f6a79d31f4abb60950a8310bfed767c4dce7ce5ba3f135aab47076f46c958619224e58b9bb40f4e34d6419a746fdea7112150415f150ebd2e0695298c5a378c0e62a6dae2a8cb40dca3a5ec7ae245a7db8328a79d63ed65b254655f50f47be90b16527a5915fc0bdeac480f6d6f42ccf9672686697dee60d6b9289d31da16b1b54b106625eaf384ad7a6397ed56706d5b69b423a32954f85109aae407dc986ee0f62623a11b6cb4a819133db6566fb4df4fc3186e3020b8938de3cbc97ca0541de1863e40a4b4a19f717222555e9854d0c533b70ad2de80022a7acc9a1e01ef37fabf0781c2ec542ac12a1fb7fe282abd436731462bd1d2a1e1db55552a9f383a6c1dd231bf71c657fec990138c9ab4be84b09c997b9878134b8e68b696475868363fa4cd4b79892e8604eeb45d9e16b87a2effacbd704fa94a1814e0c03680724c8a6dd30320fb28dbc12bb7885d5544b6807ce58c81fff8474efb61309e2dbd571011312c9b908be5de7bf128db1af9e9d4b929c44319718fbc70ad74fd175030303888ad28148a1ee8e15a9d8b28634749084a50b01e1318ac8a8cc8a310936e030b03a601d9ce8264a189698bb2c645e36aed9eb7e7b9d67f2d79851b648fc9fac2abd0512f70afed4faf9e",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-not-an-envelope",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "envelopeHex": "0203",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "judge-no-meta-is-flat",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": null,
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-no-admins-names-no-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\"}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-no-admins-member-adds",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\"}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-no-admins-member-renames",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\"}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"y\"}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-no-admins-nobody-names-the-first-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\"}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"bbbbbbbb-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-no-admins-pol-reads-as-written",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"pol\":{\"rm\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-unparseable-prior-names-no-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "not json",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-unparseable-prior-seats-nobody",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "not json",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-unreadable-adm-names-no-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":5}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-unreadable-pol-makes-every-rule-the-admins",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":\"open\"}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-unreadable-pol-admin-still-removes",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":\"open\"}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-unreadable-ban-makes-adds-the-admins",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"x\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-unreadable-ban-is-dropped-by-an-admin-only",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"x\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"y\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-unreadable-link-seats-nobody",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"},\"lk\":{\"a\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-member-removes-another",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-admin-removes-another",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-removes-own-device",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "bbbbbbbb-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-anybody-evicts-unidentified",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        null
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-reseat-is-anybodys",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-reseat-same-seat-is-anybodys",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "removed": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-reseat-another-device-is-no-reseat",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-laptop",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "removed": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-reseat-another-key-is-no-reseat",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "removed": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-reseat-another-device-key-is-a-reseat-for-now",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-laptop",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333",
+          "deviceKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "removed": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-laptop",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333",
+          "deviceKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-reseat-same-device-key-is-anybodys",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-laptop",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333",
+          "deviceKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "removed": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-laptop",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333",
+          "deviceKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-admin-swaps-a-device-with-both-halves-judged",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-laptop",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "removed": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-account-key-another-device-same-key",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": null,
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-laptop",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "removed": [],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-phone",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+          "device": "bo-phone",
+          "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "reader": {
+        "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+        "device": "bo-phone",
+        "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-account-key-beside-another-key",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": null,
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ghost",
+          "accountKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "removed": [],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-phone",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+          "device": "bo-phone",
+          "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "reader": {
+        "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+        "device": "bo-phone",
+        "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expect": {
+        "decision": "deny",
+        "reason": "account_key_conflict",
+        "reasonCode": 24
+      }
+    },
+    {
+      "id": "judge-account-key-readers-own-actor",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": null,
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+          "device": "ghost",
+          "accountKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "removed": [
+        {
+          "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+          "device": "bo-phone",
+          "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-phone",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "reader": {
+        "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+        "device": "bo-phone",
+        "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expect": {
+        "decision": "deny",
+        "reason": "account_key_conflict",
+        "reasonCode": 24
+      }
+    },
+    {
+      "id": "judge-account-key-two-added-disagree",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": null,
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-laptop",
+          "accountKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "removed": [],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+          "device": "bo-phone",
+          "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "expect": {
+        "decision": "deny",
+        "reason": "account_key_conflict",
+        "reasonCode": 24
+      }
+    },
+    {
+      "id": "judge-account-key-newcomer-is-the-servers-word",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": null,
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "cccccccc-0000-4000-8000-000000000000",
+          "device": "cy-phone",
+          "accountKey": "3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ],
+      "removed": [],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-phone",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+          "device": "bo-phone",
+          "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "reader": {
+        "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+        "device": "bo-phone",
+        "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-account-key-old-conflict-not-judged",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": null,
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-phone",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-old",
+          "accountKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "reader": {
+        "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+        "device": "bo-phone",
+        "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-account-key-policy-reason-first",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ghost",
+          "accountKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "removed": [],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-phone",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "reader": {
+        "actor": "bbbbbbbb-0000-4000-8000-000000000000",
+        "device": "bo-phone",
+        "accountKey": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-account-key-holds-without-policy-meta",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\"}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ghost",
+          "accountKey": "9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "removed": [],
+      "newMeta": null,
+      "kept": [
+        {
+          "actor": "aaaaaaaa-0000-4000-8000-000000000000",
+          "device": "ada-phone",
+          "accountKey": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "expect": {
+        "decision": "deny",
+        "reason": "account_key_conflict",
+        "reasonCode": 24
+      }
+    },
+    {
+      "id": "judge-own-device-add-under-admin-adds",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "bbbbbbbb-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-adds-when-open",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-adds-when-closed",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-admin-adds-when-closed",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-renames-when-open",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"y\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-renames-when-closed",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"meta\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"y\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"meta\":\"adm\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_needs_admin",
+        "reasonCode": 18
+      }
+    },
+    {
+      "id": "judge-member-promotes",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-admin-promotes",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-admin-order-is-not-a-change",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"y\",\"adm\":[\"bbbbbbbb-0000-4000-8000-000000000000\",\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-changes-policy",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-member-unmarks-dm",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-member-turns-on-acp-in-group",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"acp\":true}",
+      "expect": {
+        "decision": "deny",
+        "reason": "acp_needs_admin",
+        "reasonCode": 19
+      }
+    },
+    {
+      "id": "judge-admin-turns-on-acp-in-group",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"acp\":true}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-turns-on-acp-in-dm",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"dm\":true,\"acp\":true}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-acp-open-by-policy",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"acp\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"acp\":\"any\"},\"acp\":true}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-admin-drops-every-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-admin-drops-adm",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\"}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-unparseable-meta",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "not json",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-bad-policy-value",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"everyone\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-too-many-admins",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"adm\":[\"000000000000000000000000000000000000\",\"000000000000000000000000000000000001\",\"000000000000000000000000000000000002\",\"000000000000000000000000000000000003\",\"000000000000000000000000000000000004\",\"000000000000000000000000000000000005\",\"000000000000000000000000000000000006\",\"000000000000000000000000000000000007\",\"000000000000000000000000000000000008\",\"000000000000000000000000000000000009\",\"000000000000000000000000000000000010\",\"000000000000000000000000000000000011\",\"000000000000000000000000000000000012\",\"000000000000000000000000000000000013\",\"000000000000000000000000000000000014\",\"000000000000000000000000000000000015\",\"000000000000000000000000000000000016\",\"000000000000000000000000000000000017\",\"000000000000000000000000000000000018\",\"000000000000000000000000000000000019\",\"000000000000000000000000000000000020\",\"000000000000000000000000000000000021\",\"000000000000000000000000000000000022\",\"000000000000000000000000000000000023\",\"000000000000000000000000000000000024\",\"000000000000000000000000000000000025\",\"000000000000000000000000000000000026\",\"000000000000000000000000000000000027\",\"000000000000000000000000000000000028\",\"000000000000000000000000000000000029\",\"000000000000000000000000000000000030\",\"000000000000000000000000000000000031\",\"000000000000000000000000000000000032\",\"000000000000000000000000000000000033\",\"000000000000000000000000000000000034\",\"000000000000000000000000000000000035\",\"000000000000000000000000000000000036\",\"000000000000000000000000000000000037\",\"000000000000000000000000000000000038\",\"000000000000000000000000000000000039\",\"000000000000000000000000000000000040\",\"000000000000000000000000000000000041\",\"000000000000000000000000000000000042\",\"000000000000000000000000000000000043\",\"000000000000000000000000000000000044\",\"000000000000000000000000000000000045\",\"000000000000000000000000000000000046\",\"000000000000000000000000000000000047\",\"000000000000000000000000000000000048\",\"000000000000000000000000000000000049\",\"000000000000000000000000000000000050\",\"000000000000000000000000000000000051\",\"000000000000000000000000000000000052\",\"000000000000000000000000000000000053\",\"000000000000000000000000000000000054\",\"000000000000000000000000000000000055\",\"000000000000000000000000000000000056\",\"000000000000000000000000000000000057\",\"000000000000000000000000000000000058\",\"000000000000000000000000000000000059\",\"000000000000000000000000000000000060\",\"000000000000000000000000000000000061\",\"000000000000000000000000000000000062\",\"000000000000000000000000000000000063\",\"000000000000000000000000000000000064\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-first-remove-denies-before-meta",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": "not json",
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-member-removes-another-when-rm-any",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"rm\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-removes-another-when-rm-adm",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"rm\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-member-removes-an-admin-when-rm-any",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"rm\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [
+        "aaaaaaaa-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-rm-any-does-not-open-governance",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"rm\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\"],\"pol\":{\"rm\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-member-sets-rm-policy",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"rm\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-bad-rm-value",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"rm\":\"members\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-member-sets-timer-when-open",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"dis\":604800}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-sets-timer-when-closed",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"meta\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"meta\":\"adm\"},\"dis\":604800}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_needs_admin",
+        "reasonCode": 18
+      }
+    },
+    {
+      "id": "judge-admin-sets-timer-when-closed",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"meta\":\"adm\"}}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"meta\":\"adm\"},\"dis\":604800}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-sets-timer-in-dm",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"dm\":true,\"dis\":30}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-link-lets-a-member-seat-a-joiner",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"},\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-link-with-approval-needs-an-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"},\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"adm\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-admin-approves-a-request",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"},\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"adm\"}}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-banned-cannot-be-seated-by-link",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"},\"ban\":[\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_banned",
+        "reasonCode": 22
+      }
+    },
+    {
+      "id": "judge-banned-cannot-be-added-by-an-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_banned",
+        "reasonCode": 22
+      }
+    },
+    {
+      "id": "judge-member-turns-on-the-link",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-admin-turns-on-the-link",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-resets-the-link",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"BBBBBBBBBBBBBBBBBBBBBB\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-admin-resets-the-link",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"BBBBBBBBBBBBBBBBBBBBBB\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-admin-requires-approval",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"adm\"}}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-member-bans",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-admin-bans",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-admin-lifts-a-ban",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-admin-bans-the-hundredth",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"00000000-0000-4000-8000-000000000000\",\"00000001-0000-4000-8000-000000000000\",\"00000002-0000-4000-8000-000000000000\",\"00000003-0000-4000-8000-000000000000\",\"00000004-0000-4000-8000-000000000000\",\"00000005-0000-4000-8000-000000000000\",\"00000006-0000-4000-8000-000000000000\",\"00000007-0000-4000-8000-000000000000\",\"00000008-0000-4000-8000-000000000000\",\"00000009-0000-4000-8000-000000000000\",\"0000000a-0000-4000-8000-000000000000\",\"0000000b-0000-4000-8000-000000000000\",\"0000000c-0000-4000-8000-000000000000\",\"0000000d-0000-4000-8000-000000000000\",\"0000000e-0000-4000-8000-000000000000\",\"0000000f-0000-4000-8000-000000000000\",\"00000010-0000-4000-8000-000000000000\",\"00000011-0000-4000-8000-000000000000\",\"00000012-0000-4000-8000-000000000000\",\"00000013-0000-4000-8000-000000000000\",\"00000014-0000-4000-8000-000000000000\",\"00000015-0000-4000-8000-000000000000\",\"00000016-0000-4000-8000-000000000000\",\"00000017-0000-4000-8000-000000000000\",\"00000018-0000-4000-8000-000000000000\",\"00000019-0000-4000-8000-000000000000\",\"0000001a-0000-4000-8000-000000000000\",\"0000001b-0000-4000-8000-000000000000\",\"0000001c-0000-4000-8000-000000000000\",\"0000001d-0000-4000-8000-000000000000\",\"0000001e-0000-4000-8000-000000000000\",\"0000001f-0000-4000-8000-000000000000\",\"00000020-0000-4000-8000-000000000000\",\"00000021-0000-4000-8000-000000000000\",\"00000022-0000-4000-8000-000000000000\",\"00000023-0000-4000-8000-000000000000\",\"00000024-0000-4000-8000-000000000000\",\"00000025-0000-4000-8000-000000000000\",\"00000026-0000-4000-8000-000000000000\",\"00000027-0000-4000-8000-000000000000\",\"00000028-0000-4000-8000-000000000000\",\"00000029-0000-4000-8000-000000000000\",\"0000002a-0000-4000-8000-000000000000\",\"0000002b-0000-4000-8000-000000000000\",\"0000002c-0000-4000-8000-000000000000\",\"0000002d-0000-4000-8000-000000000000\",\"0000002e-0000-4000-8000-000000000000\",\"0000002f-0000-4000-8000-000000000000\",\"00000030-0000-4000-8000-000000000000\",\"00000031-0000-4000-8000-000000000000\",\"00000032-0000-4000-8000-000000000000\",\"00000033-0000-4000-8000-000000000000\",\"00000034-0000-4000-8000-000000000000\",\"00000035-0000-4000-8000-000000000000\",\"00000036-0000-4000-8000-000000000000\",\"00000037-0000-4000-8000-000000000000\",\"00000038-0000-4000-8000-000000000000\",\"00000039-0000-4000-8000-000000000000\",\"0000003a-0000-4000-8000-000000000000\",\"0000003b-0000-4000-8000-000000000000\",\"0000003c-0000-4000-8000-000000000000\",\"0000003d-0000-4000-8000-000000000000\",\"0000003e-0000-4000-8000-000000000000\",\"0000003f-0000-4000-8000-000000000000\",\"00000040-0000-4000-8000-000000000000\",\"00000041-0000-4000-8000-000000000000\",\"00000042-0000-4000-8000-000000000000\",\"00000043-0000-4000-8000-000000000000\",\"00000044-0000-4000-8000-000000000000\",\"00000045-0000-4000-8000-000000000000\",\"00000046-0000-4000-8000-000000000000\",\"00000047-0000-4000-8000-000000000000\",\"00000048-0000-4000-8000-000000000000\",\"00000049-0000-4000-8000-000000000000\",\"0000004a-0000-4000-8000-000000000000\",\"0000004b-0000-4000-8000-000000000000\",\"0000004c-0000-4000-8000-000000000000\",\"0000004d-0000-4000-8000-000000000000\",\"0000004e-0000-4000-8000-000000000000\",\"0000004f-0000-4000-8000-000000000000\",\"00000050-0000-4000-8000-000000000000\",\"00000051-0000-4000-8000-000000000000\",\"00000052-0000-4000-8000-000000000000\",\"00000053-0000-4000-8000-000000000000\",\"00000054-0000-4000-8000-000000000000\",\"00000055-0000-4000-8000-000000000000\",\"00000056-0000-4000-8000-000000000000\",\"00000057-0000-4000-8000-000000000000\",\"00000058-0000-4000-8000-000000000000\",\"00000059-0000-4000-8000-000000000000\",\"0000005a-0000-4000-8000-000000000000\",\"0000005b-0000-4000-8000-000000000000\",\"0000005c-0000-4000-8000-000000000000\",\"0000005d-0000-4000-8000-000000000000\",\"0000005e-0000-4000-8000-000000000000\",\"0000005f-0000-4000-8000-000000000000\",\"00000060-0000-4000-8000-000000000000\",\"00000061-0000-4000-8000-000000000000\",\"00000062-0000-4000-8000-000000000000\",\"00000063-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-too-many-bans-are-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"00000000-0000-4000-8000-000000000000\",\"00000001-0000-4000-8000-000000000000\",\"00000002-0000-4000-8000-000000000000\",\"00000003-0000-4000-8000-000000000000\",\"00000004-0000-4000-8000-000000000000\",\"00000005-0000-4000-8000-000000000000\",\"00000006-0000-4000-8000-000000000000\",\"00000007-0000-4000-8000-000000000000\",\"00000008-0000-4000-8000-000000000000\",\"00000009-0000-4000-8000-000000000000\",\"0000000a-0000-4000-8000-000000000000\",\"0000000b-0000-4000-8000-000000000000\",\"0000000c-0000-4000-8000-000000000000\",\"0000000d-0000-4000-8000-000000000000\",\"0000000e-0000-4000-8000-000000000000\",\"0000000f-0000-4000-8000-000000000000\",\"00000010-0000-4000-8000-000000000000\",\"00000011-0000-4000-8000-000000000000\",\"00000012-0000-4000-8000-000000000000\",\"00000013-0000-4000-8000-000000000000\",\"00000014-0000-4000-8000-000000000000\",\"00000015-0000-4000-8000-000000000000\",\"00000016-0000-4000-8000-000000000000\",\"00000017-0000-4000-8000-000000000000\",\"00000018-0000-4000-8000-000000000000\",\"00000019-0000-4000-8000-000000000000\",\"0000001a-0000-4000-8000-000000000000\",\"0000001b-0000-4000-8000-000000000000\",\"0000001c-0000-4000-8000-000000000000\",\"0000001d-0000-4000-8000-000000000000\",\"0000001e-0000-4000-8000-000000000000\",\"0000001f-0000-4000-8000-000000000000\",\"00000020-0000-4000-8000-000000000000\",\"00000021-0000-4000-8000-000000000000\",\"00000022-0000-4000-8000-000000000000\",\"00000023-0000-4000-8000-000000000000\",\"00000024-0000-4000-8000-000000000000\",\"00000025-0000-4000-8000-000000000000\",\"00000026-0000-4000-8000-000000000000\",\"00000027-0000-4000-8000-000000000000\",\"00000028-0000-4000-8000-000000000000\",\"00000029-0000-4000-8000-000000000000\",\"0000002a-0000-4000-8000-000000000000\",\"0000002b-0000-4000-8000-000000000000\",\"0000002c-0000-4000-8000-000000000000\",\"0000002d-0000-4000-8000-000000000000\",\"0000002e-0000-4000-8000-000000000000\",\"0000002f-0000-4000-8000-000000000000\",\"00000030-0000-4000-8000-000000000000\",\"00000031-0000-4000-8000-000000000000\",\"00000032-0000-4000-8000-000000000000\",\"00000033-0000-4000-8000-000000000000\",\"00000034-0000-4000-8000-000000000000\",\"00000035-0000-4000-8000-000000000000\",\"00000036-0000-4000-8000-000000000000\",\"00000037-0000-4000-8000-000000000000\",\"00000038-0000-4000-8000-000000000000\",\"00000039-0000-4000-8000-000000000000\",\"0000003a-0000-4000-8000-000000000000\",\"0000003b-0000-4000-8000-000000000000\",\"0000003c-0000-4000-8000-000000000000\",\"0000003d-0000-4000-8000-000000000000\",\"0000003e-0000-4000-8000-000000000000\",\"0000003f-0000-4000-8000-000000000000\",\"00000040-0000-4000-8000-000000000000\",\"00000041-0000-4000-8000-000000000000\",\"00000042-0000-4000-8000-000000000000\",\"00000043-0000-4000-8000-000000000000\",\"00000044-0000-4000-8000-000000000000\",\"00000045-0000-4000-8000-000000000000\",\"00000046-0000-4000-8000-000000000000\",\"00000047-0000-4000-8000-000000000000\",\"00000048-0000-4000-8000-000000000000\",\"00000049-0000-4000-8000-000000000000\",\"0000004a-0000-4000-8000-000000000000\",\"0000004b-0000-4000-8000-000000000000\",\"0000004c-0000-4000-8000-000000000000\",\"0000004d-0000-4000-8000-000000000000\",\"0000004e-0000-4000-8000-000000000000\",\"0000004f-0000-4000-8000-000000000000\",\"00000050-0000-4000-8000-000000000000\",\"00000051-0000-4000-8000-000000000000\",\"00000052-0000-4000-8000-000000000000\",\"00000053-0000-4000-8000-000000000000\",\"00000054-0000-4000-8000-000000000000\",\"00000055-0000-4000-8000-000000000000\",\"00000056-0000-4000-8000-000000000000\",\"00000057-0000-4000-8000-000000000000\",\"00000058-0000-4000-8000-000000000000\",\"00000059-0000-4000-8000-000000000000\",\"0000005a-0000-4000-8000-000000000000\",\"0000005b-0000-4000-8000-000000000000\",\"0000005c-0000-4000-8000-000000000000\",\"0000005d-0000-4000-8000-000000000000\",\"0000005e-0000-4000-8000-000000000000\",\"0000005f-0000-4000-8000-000000000000\",\"00000060-0000-4000-8000-000000000000\",\"00000061-0000-4000-8000-000000000000\",\"00000062-0000-4000-8000-000000000000\",\"00000063-0000-4000-8000-000000000000\",\"00000064-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-a-link-that-is-off-seats-nobody",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"},\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"off\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-member-turns-off-the-link",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"off\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-a-link-without-a-key-is-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-a-link-without-an-access-is-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-a-link-without-a-reader-key-is-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-a-link-whose-keys-match-is-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"r\":\"AAAAAAAAAAAAAAAAAAAAAA\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-a-link-key-of-the-wrong-length-is-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"lk\":{\"k\":\"AAAAAAAAAAAAAAAAAAAAA\",\"r\":\"RRRRRRRRRRRRRRRRRRRRRR\",\"a\":\"any\"}}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-a-duplicate-ban-is-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"cccccccc-0000-4000-8000-000000000000\",\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-a-ban-that-is-not-an-actor-is-unreadable",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "aaaaaaaa-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"bob\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "meta_unreadable",
+        "reasonCode": 21
+      }
+    },
+    {
+      "id": "judge-an-empty-ban-list-is-no-ban-list",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-banned-cannot-be-reseated",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"ban\":[\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_banned",
+        "reasonCode": 22
+      }
+    },
+    {
+      "id": "open-link-preview",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "envelopeHex": "02000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e0dcd644f70e74f9da8c30fc70fe958feea29d4278f16c97783cc76fe6ad5cb44e1544b949b87857ce4f215e53f1fc33e7e79604ffd0e48cbb1c98fb62d94ca1929eeaa7eea0fbd2ec4d0955daf0a18799ad807a6bcf05e9bc02c40ae63c96094fbe6cc11ef9be5b54f75916eb455b772fe9ad700c233eb7e9a54e07eeabb7729791da958cef19687f1ff390bdee6ce76ec2581fa0b2ccc64568faf6e9d56d7ff9aa86bac0d5bd7b22ae449d8fc35b52f453149c61766fbfd5a9aace3f4716d5f7505dc85005d1954620e73d29dca25bb7978f01976599e2072b4a030ddbc2aaacdaa36aeb3922f3d47cb2b17aac4637fd2c54e15b708e227d2d16678bf661d34bac9f9ca44ba11c1582b32664c7ceef96022e54e8d7dbecec220d4374a4b81da58913c8fe9ef10239437f29e3c0e8b1db7a45efa6e0d0ac407cc4e79a4a8588098f58c5f15d8e0c1b98820f8a74cacb08e7d25682ccbe7e88cbf8a7bf885a0e0065a194bf20796a74a52c373c9d87628524c17d507d5776ea54ccb8d5ca23c95135c0682576f93134db751f951d5b7d823087aa31f85d8aebbd2e760a246ca2b9a336f917ed3257b6eb370c7bc7d889aea5dcee77fa0fbc40d10c8021128cd420090bc513a2b7957f995315cb8493fd8a436db12132ea6b46a3ced1f20e39f9ddbe47",
+      "expect": {
+        "opened": true,
+        "groupId": "11111111-1111-4111-8111-111111111111",
+        "envelopeKind": 5,
+        "innerHex": "7b2276223a312c226e223a22426f6f6b20636c7562222c2263223a337d"
+      }
+    },
+    {
+      "id": "judge-direct-member-names-it",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\",\"cccccccc-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"Taco night\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\",\"cccccccc-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-direct-member-adds",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\",\"cccccccc-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "sender": "cccccccc-0000-4000-8000-000000000000",
+      "added": [
+        "dddddddd-0000-4000-8000-000000000000"
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-direct-member-admits-the-added",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\",\"cccccccc-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "sender": "cccccccc-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"bbbbbbbb-0000-4000-8000-000000000000\",\"cccccccc-0000-4000-8000-000000000000\",\"dddddddd-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "judge-non-admin-cannot-clear-dm",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"dm\":true}",
+      "sender": "bbbbbbbb-0000-4000-8000-000000000000",
+      "added": [],
+      "removed": [],
+      "newMeta": "{\"v\":1,\"n\":\"Taco night\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "expect": {
+        "decision": "deny",
+        "reason": "policy_needs_admin",
+        "reasonCode": 20
+      }
+    },
+    {
+      "id": "judge-unidentified-sender-is-never-an-admin",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\",\"\"]}",
+      "sender": "",
+      "added": [],
+      "removed": [
+        "cccccccc-0000-4000-8000-000000000000"
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "remove_needs_admin",
+        "reasonCode": 17
+      }
+    },
+    {
+      "id": "judge-unidentified-sender-owns-no-leaf",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"],\"pol\":{\"add\":\"adm\"}}",
+      "sender": "",
+      "added": [
+        ""
+      ],
+      "removed": [],
+      "newMeta": null,
+      "expect": {
+        "decision": "deny",
+        "reason": "add_needs_admin",
+        "reasonCode": 16
+      }
+    },
+    {
+      "id": "judge-unidentified-sender-may-evict-unidentified",
+      "kind": "roster",
+      "call": "judge",
+      "priorMeta": "{\"v\":1,\"n\":\"x\",\"adm\":[\"aaaaaaaa-0000-4000-8000-000000000000\"]}",
+      "sender": "",
+      "added": [],
+      "removed": [
+        null
+      ],
+      "newMeta": null,
+      "expect": {
+        "decision": "allow"
+      }
+    },
+    {
+      "id": "open-version-1-is-refused",
+      "kind": "roster",
+      "call": "open",
+      "why": "Version 1 (unpadded, keyed by the group id) is not a version a reader opens, even for the group it was sealed for.",
+      "groupIds": [
+        "22222222-2222-4222-8222-222222222222",
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "envelopeHex": "01000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e4b4b328861a8c1a519f5781fbcb75524417f53e2368",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-unknown-version-is-refused",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "envelopeHex": "03000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e4b4b328861a8c1a519f5781fbcb75524417f53e2368",
+      "expect": {
+        "opened": false
+      },
+      "why": "A version 2 envelope relabelled 3: the group id's keys never open a version 3 envelope, and no epoch secret is held."
+    },
+    {
+      "id": "open-padding-not-zeros",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "envelopeHex": "02000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e4dcd644ef1d33e394d900d15391b6b4cde1f32c12d00efa0c5fe442c5cf7f8f7c6945b848b97956cf4e205f52f0fd32e6e69705fed1e58dba1d99fa63d84da0939feba6efa1fad3ed4c0854dbf1a08698ac817b6ace04e8bd03c50be73d97084ebf6dc01ff8bf5a55f65817ea445a762ee8ac710d223fb6e8a44f06efaab6739690db948dee18697e1ef291bcef6de66fc3591ea1b3cdc74469fbf7e8d46c7ef8ab87bbc1d4bc7a23af459c8ec25a53f552159d60776ebed4a8abcf3e4617d4f6515cc95104d0944721e63c28dda35ab6968e00966498e3062a4b020cdac3abaddba26bea3823f2d57db3b07bad4736fc2d55e05a718f237c2c17668af760d24aad9e9da54aa01d1483b22765c6cfee97032f55e9d6daeded230c4275a5b91ca48812c9ff9ff00338427e28e2c1e9b0da7b44eea7e1d1ad417dc5e69b4b8489088e59c4f05c8f0d1a99830e8b75cbca09e6d35783cdbf7f89caf9a6be895b0f0164a095be21786b75a42d363d9c86638425c07c517c5677eb55cdb9d4cb22c85034c1692477f83035da741e941c5a7c833186ab30f95c8beabc2f770b256da3b8a237f816ec3356b7ea360d7ac6d988afa4ddef76fb0ebd41d00d8120138dd521080ac412a3b6947e985214ca8592fc8b426c59aa6dfb6f5ee6661d15b559079fb494",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "seal-every-short-kind-one-size",
+      "kind": "roster",
+      "call": "seal",
+      "groupId": "22222222-2222-4222-8222-222222222222",
+      "envelopeKind": 3,
+      "innerHex": "414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+      "nonceHex": "0b0a09080706050403020100",
+      "expect": {
+        "envelopeHex": "020b0a0908070605040302010001f4505d2f22750ebc97c6dbcb3635e1ed5c4ee020a74511423f50ec1bfa16611336b9178bf7932b7adfbf9040809833c9d5dfb990ad878e4768c53226995e2b344e2593b0e533637008e0aa65a1821bf1ca1662d086a5a3e765234e2c70815e907221d7afb6655fa0a82e8595bd7daab5b6e043b2c12cbad7dcc120953716961d65aa5a34ffa271dfa6f5e4f7cb62fc0fedb793fa1b8e2c6baa44c08cfc17a9e843ebceacfd08c32afad6ee2564c7632cb313900da4d4feded703a6164d8c0d7bb0d703f8a351c47d82ce7d8e3b2013c052985b25fd00b5c3a69ef437a28c4b06473550c755b53e31d4686e0b45a09bf5171e402e426664ed5e739dc0fa2ac505172a0fcde10d68f4447ff2fa3f19f191d0e836d5f56e5e50f4a23d944b712ead7d76130b150381c51e7534b3a3f381d39018546db4b440a4a22ae1a010a368c084fac9b575de913980ccdae388806e300d508fd24179846907a105aa93e63d96022530fb5d4075e6e1e3e6b448f07b7c11579fab1e37b5d998afa1809d403d73b733f940f8c1ab65735fa858ff3feb637612f5b6ce79491b5f6007a4d18f146936604f8a29840deeba159b263b42164dbd138bfb01e0c359749f7dd515baa10fc721cceca234804be66e65382430c720a41c46e8d6bf6a58bf0500335dd557340989b89e2505b338197e44d9fd58041e0bae"
+      }
+    },
+    {
+      "id": "seal-past-the-floor",
+      "kind": "roster",
+      "call": "seal",
+      "groupId": "11111111-1111-4111-8111-111111111111",
+      "envelopeKind": 1,
+      "innerHex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "nonceHex": "000102030405060708090a0b",
+      "expect": {
+        "envelopeHex": "02000102030405060708090a0b5ccbefd44abeb17df395e2a8edfd31b5e4dcd6470275568ff8b601d05290b7b5cce0f22d13d10ffb0d5ee543c4ce7e8e7d6844b949b87857ce4f215e53f1fc33e7e79604ffd0e48cbb1c98fb62d94ca1929eeaa7eea0fbd2ec4d0955daf0a18799ad807a6bcf05e9bc02c40ae63c96094fbe6cc11ef9be5b54f75916eb455b772fe9ad700c233eb7e9a54e07eeabb7729791da958cef19687f1ff390bdee6ce76ec2581fa0b2ccc64568faf6e9d56d7ff9aa86bac0d5bd7b22ae449d8fc35b52f453149c61766fbfd5a9aace3f4716d5f7505dc85005d1954620e73d29dca25bb7978f01976599e2072b4a030ddbc2aaacdaa36aeb3922f3d47cb2b17aac4637fd2c54e15b708e227d2d16678bf661d34bac9f9ca44ba11c1582b32664c7ceef96022e54e8d7dbecec220d4374a4b81da58913c8fe9ef10239437f29e3c0e8b1db7a45efa6e0d0ac407cc4e79a4a8588098f58c5f15d8e0c1b98820f8a74cacb08e7d25682ccbe7e88cbf8a7bf885a0e0065a194bf20796a74a52c373c9d87628524c17d507d5776ea54ccb8d5ca23c95135c0682576f93134db751f951d5b7d823087aa31f85d8aebbd2e760a246ca2b9a336f917ed3257b6eb370c7bc7d889aea5dcee77fa0fbc40d10c8021128cd420090bc513a2b7957f995315cb8493fd8a436d8cf2387efc49b28d6c37acc2cb013abc77d034095b6dccc19a19e2bd7c8853a2a2e07c0fabad1bb8a0634fb86229631af54356fa60c8487e023db97b7c668a1ec41b74cb6de913fd260008b446a550d80e14e9ad994c53ad7f1ab146d5cd42cdc220cf4a6f6c68554b1ecfba12b7f4f28779654aa10bf933971277e5c3c890eecfadb14458faf8283c036454e8498d4739f49ebd6e1f1629756dcbbf22b8d5331ff299c8f68ec12d8f455df7560314a140d420c071454ec34cc7c5d5cb7036a03e14e3d9c44bf5f7f8ed25656dcb4627f78f51045db64b07c512a3cf60aa2666ec38b4bc2fe6d2edfdff84635e7b366d2693a2eb060af1866ef9e878aeeb94516e669aabf2a1ab21cb16279dca384b5607dcf9997ab7e3ae3a18aab23f9097f3523cd729b5e7b3f67b3072f0103c13b21d9de1b43f1d5cafc83e576a35411eda7189e835793be1fd884d5dba38943316cc5170ccab2306cbd361944ea0de164b8816b4ce5891e8546023df58d5ee8cdeff76862ecb54bb40d8c7fe692d3547a9913ec70b6a7fa2999fc9c9b11034df0fa391b2b2ff6c077a6e3e862217e822bf608aef64d09d5035e2f2005814258bc7cb896676694c97278aa5ba269a2b47826a35b79bd0d95c859edf0aef30890869b5a181d79a958d02a27ae0f55dc12b7b7f94662e6245cbbef738bdb2cbcc733bc58e3ee3daadd86e2f937686257d6f68115036c5bc80cca1fcca9d13138adcf41a4aa0af4288ce4f5e28c02856d94a3c7921e53e80190287b4e5da6553188e6bba06135f163787c20ca7bc5ce262586a1866a93b77feae1313e2be6742d0e5c1"
+      }
+    },
+    {
+      "id": "seal-message-v3",
+      "kind": "roster",
+      "call": "seal",
+      "why": "Version 3: the version 2 layout, keyed by one epoch's envelope secret (MLS-Exporter(\"peachy envelope epoch v1\", group id, 32)), enc = SHA-256(\"peachy epoch envelope v1\" || secret), route = SHA-256(\"peachy epoch route v1\" || secret). No group id goes in.",
+      "epochSecretHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "envelopeKind": 1,
+      "innerHex": "68656c6c6f",
+      "nonceHex": "000102030405060708090a0b",
+      "expect": {
+        "envelopeHex": "03000102030405060708090a0bab187f5a712cdeddc17233e9d8db7147d69928d71fd6e88c60291f7ca4a3dc9485567d2e4dffb94f160d7ce5b79b43834d19e623fe97704bf40c39c6e266b985a01b43a0c7bb88e573af595c68829200514e7e9f8ab25509789d92658bf1800557be340520f980c0bcd7f04ece26a705ac58a4b375cc0e08fdbe146b3319077b3976a55c16035b46e0f1f90ee8c80fdd9e75df77d0010e76466a703dea536e2edf39c74341ef3491ae2aab5ee6a1114b1cb5ca85d41fb35fe7758e76b6e636fdf8d6a1496b6ff15a551cc42589a30c498fa80aa234a77e593501178f7131c7b50c6e2e6a78ffcb161019a3cb3031ed252d4ecb2dd209fcac93684a8f8a8af7bf3de8ef80d4e942c5cb20a6b418c928e6ac61e89b54a5b4f8f48ff22b9adda9ac2e95df44fcd00e752cac741cd1932431ea8c5cd388e233f7a38ce44bfe34439541b09c50c4504be944701db43887e2934d1d5e8a6e95865020a70d8b25e46c582ce31e9de6a63c935d51dbc3d28271adb424c2b03d32007f6b29fd389cfd06e1ab3bd9d1011316c8c31f92cc6e796f9a7e07ecb80c8d0cb97d4fb81d2202178cb29eab037e36facd8885561cf252ba348af68ece6eb4db434e24d508abb31c376d28782fc0537cde321efa3de3f1764c535bd2f0876765653267472f791b4c8a1a6f8a3d3f6aa50ac0959e39ecf1dc2b884e7a"
+      }
+    },
+    {
+      "id": "seal-commit-v3",
+      "kind": "roster",
+      "call": "seal",
+      "epochSecretHex": "201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a090807060504030201",
+      "envelopeKind": 2,
+      "innerHex": "deadbeef",
+      "nonceHex": "ffffffffffffffffffffffff",
+      "expect": {
+        "envelopeHex": "03ffffffffffffffffffffffffff2b4183666a5cccf96268ce6d153a6c0fbe7076f873e593932dbc99fc22ad79f077978e3a6371b982c3a8d5188e1eac3aa164895bda8ef1b7fcbe6de617af08fac70e9e3bf195f19be378fcf9fb122d0d05543b57075c335f48799690d55d66a90bf433cefe6589b7a38ec8e902dd968438e6c3a8f88693746455427df1937117ef625fd0b8e33f59c1ab801f6d32eb304ff1ab8fe649638a29941ca3f0543b73d97a4c9b2e932df79a1eb72e308666ad78a04d7283b185128de0918ff51f3b6bc1b3dd30192f669885c2ea39929b3497896ba141f4c4d76ee5f18d62dd8d2a26b405671a8029a45f17d9be9726e8c306ea173d2ac6adf7b2a928951b4c581ff6c0209c8ab0f6f8bdaae43515ff06aac23375443bc33bfb601601fc5591d1074bcfd8acd6e54aa7a2a4aca97bfa40e76f900b8cd0cf77b706af464a5ffc3d1a3a24d09ee22e0f8bbdba12db466abc781ff84d50eba9f6183ae9502a11b3f44d4335b9f7ed606f0b5dd9960ccdc6cbe8e88ac4f8b2be2f54fa1dff011ede862260dc6661aa73b7c539b62959b17fd50ba9ff037c5929a60cfcd3d178299a743057b1b4edd69b076adee786bce5146f9df31bb9089353ab5f3f01798a534f118ff79da277359785c7e4997def8948fb84d2c066df628185268ef8dc8e4d8c0f5de2782e2f7ab6872ef0f39b2ce47b02a6b5dd1d"
+      }
+    },
+    {
+      "id": "seal-typing-empty-v3",
+      "kind": "roster",
+      "call": "seal",
+      "epochSecretHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "envelopeKind": 4,
+      "innerHex": "",
+      "nonceHex": "ffffffffffffffffffffffff",
+      "expect": {
+        "envelopeHex": "03ffffffffffffffffffffffff1acfa3454ddac943611cb385bb2d8b11e6bc54887ebf8ad45c8e2501f0ffc47efbf486425a4812a997252fde409150dc6e96c0719e2c5b1a1f59e91fb28522a594ae33caf67342ee6ee5bec16fb3203aaf50fbac546407487a0f7eb59a18d6ae6235f39e2818198d147077a33c313b71ef3bf72e24819cff6d94460b2350cdd010966836b668ebf5b284538314ff7e10756515e59da174cc8953478c0f12acdf7428acd63308afc0870fcd4561882f12e9011c59b94c7ecabaffbdd8cf6a72c07fcc6251842eab1d26573d4648d5501b9acaa9599895ea8b4df2290f742b286ff79f3babc319614eeed6368dfd81643fb51abdd2c1f072455c844ddd52c5d246054b2c899282c5fdb37675b5539da7d7159765b630af2819a77a204a56a0ffff46a73cfc3d3fb036e0b1c917fdf370796fa629ecbe671d02832e86d1ca76b8ee3846ae5ded5f227cf4fcdefc93cfa7deda54fd6c221fd879516dcbe3e7545bc6fe1557a4f32b9752371feac8649cebaf162cdc4305992be7a87060709011ff7619f328aefe71bbd9d4fa6b661dd14e35a67ad31d54e06de12293d8861bf4eadd3bff461509745f3e804109a4637ae73d8ca7849f034ac7277c74aa643dfefe705aefe5ebf17577c213612bf665ad55098ef2d30e28107deffcfd332379153e3de7a736b13d1cb7966280b8ccf8baf5bea0f5f2"
+      }
+    },
+    {
+      "id": "open-epoch-finds-its-epoch",
+      "kind": "roster",
+      "call": "open",
+      "why": "A reader tries the epoch secrets it holds: the one the envelope was sealed under opens it.",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222"
+      ],
+      "epochSecretsHex": [
+        "201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a090807060504030201",
+        "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+      ],
+      "envelopeHex": "03000102030405060708090a0bab187f5a712cdeddc17233e9d8db7147d69928d71fd6e88c60291f7ca4a3dc9485567d2e4dffb94f160d7ce5b79b43834d19e623fe97704bf40c39c6e266b985a01b43a0c7bb88e573af595c68829200514e7e9f8ab25509789d92658bf1800557be340520f980c0bcd7f04ece26a705ac58a4b375cc0e08fdbe146b3319077b3976a55c16035b46e0f1f90ee8c80fdd9e75df77d0010e76466a703dea536e2edf39c74341ef3491ae2aab5ee6a1114b1cb5ca85d41fb35fe7758e76b6e636fdf8d6a1496b6ff15a551cc42589a30c498fa80aa234a77e593501178f7131c7b50c6e2e6a78ffcb161019a3cb3031ed252d4ecb2dd209fcac93684a8f8a8af7bf3de8ef80d4e942c5cb20a6b418c928e6ac61e89b54a5b4f8f48ff22b9adda9ac2e95df44fcd00e752cac741cd1932431ea8c5cd388e233f7a38ce44bfe34439541b09c50c4504be944701db43887e2934d1d5e8a6e95865020a70d8b25e46c582ce31e9de6a63c935d51dbc3d28271adb424c2b03d32007f6b29fd389cfd06e1ab3bd9d1011316c8c31f92cc6e796f9a7e07ecb80c8d0cb97d4fb81d2202178cb29eab037e36facd8885561cf252ba348af68ece6eb4db434e24d508abb31c376d28782fc0537cde321efa3de3f1764c535bd2f0876765653267472f791b4c8a1a6f8a3d3f6aa50ac0959e39ecf1dc2b884e7a",
+      "expect": {
+        "opened": true,
+        "epochSecretHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "envelopeKind": 1,
+        "innerHex": "68656c6c6f"
+      }
+    },
+    {
+      "id": "open-epoch-not-by-the-group-id",
+      "kind": "roster",
+      "call": "open",
+      "why": "A removed member keeps the group id and no later epoch: a version 3 envelope neither routes nor opens for it.",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222"
+      ],
+      "envelopeHex": "03000102030405060708090a0bab187f5a712cdeddc17233e9d8db7147d69928d71fd6e88c60291f7ca4a3dc9485567d2e4dffb94f160d7ce5b79b43834d19e623fe97704bf40c39c6e266b985a01b43a0c7bb88e573af595c68829200514e7e9f8ab25509789d92658bf1800557be340520f980c0bcd7f04ece26a705ac58a4b375cc0e08fdbe146b3319077b3976a55c16035b46e0f1f90ee8c80fdd9e75df77d0010e76466a703dea536e2edf39c74341ef3491ae2aab5ee6a1114b1cb5ca85d41fb35fe7758e76b6e636fdf8d6a1496b6ff15a551cc42589a30c498fa80aa234a77e593501178f7131c7b50c6e2e6a78ffcb161019a3cb3031ed252d4ecb2dd209fcac93684a8f8a8af7bf3de8ef80d4e942c5cb20a6b418c928e6ac61e89b54a5b4f8f48ff22b9adda9ac2e95df44fcd00e752cac741cd1932431ea8c5cd388e233f7a38ce44bfe34439541b09c50c4504be944701db43887e2934d1d5e8a6e95865020a70d8b25e46c582ce31e9de6a63c935d51dbc3d28271adb424c2b03d32007f6b29fd389cfd06e1ab3bd9d1011316c8c31f92cc6e796f9a7e07ecb80c8d0cb97d4fb81d2202178cb29eab037e36facd8885561cf252ba348af68ece6eb4db434e24d508abb31c376d28782fc0537cde321efa3de3f1764c535bd2f0876765653267472f791b4c8a1a6f8a3d3f6aa50ac0959e39ecf1dc2b884e7a",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-epoch-another-epoch",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [],
+      "epochSecretsHex": [
+        "201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a090807060504030201"
+      ],
+      "envelopeHex": "03000102030405060708090a0bab187f5a712cdeddc17233e9d8db7147d69928d71fd6e88c60291f7ca4a3dc9485567d2e4dffb94f160d7ce5b79b43834d19e623fe97704bf40c39c6e266b985a01b43a0c7bb88e573af595c68829200514e7e9f8ab25509789d92658bf1800557be340520f980c0bcd7f04ece26a705ac58a4b375cc0e08fdbe146b3319077b3976a55c16035b46e0f1f90ee8c80fdd9e75df77d0010e76466a703dea536e2edf39c74341ef3491ae2aab5ee6a1114b1cb5ca85d41fb35fe7758e76b6e636fdf8d6a1496b6ff15a551cc42589a30c498fa80aa234a77e593501178f7131c7b50c6e2e6a78ffcb161019a3cb3031ed252d4ecb2dd209fcac93684a8f8a8af7bf3de8ef80d4e942c5cb20a6b418c928e6ac61e89b54a5b4f8f48ff22b9adda9ac2e95df44fcd00e752cac741cd1932431ea8c5cd388e233f7a38ce44bfe34439541b09c50c4504be944701db43887e2934d1d5e8a6e95865020a70d8b25e46c582ce31e9de6a63c935d51dbc3d28271adb424c2b03d32007f6b29fd389cfd06e1ab3bd9d1011316c8c31f92cc6e796f9a7e07ecb80c8d0cb97d4fb81d2202178cb29eab037e36facd8885561cf252ba348af68ece6eb4db434e24d508abb31c376d28782fc0537cde321efa3de3f1764c535bd2f0876765653267472f791b4c8a1a6f8a3d3f6aa50ac0959e39ecf1dc2b884e7a",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-epoch-tampered",
+      "kind": "roster",
+      "call": "open",
+      "groupIds": [],
+      "epochSecretsHex": [
+        "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+      ],
+      "envelopeHex": "03000102030405060708090a0bab187f5a712cdeddc17233e9d8db7147d69928d71fd6e88c60291f7ca4a3dc9485567d2e4dffb94f160d7ce5b79b43834d19e623fe97704bf40c39c6e266b985a01b43a0c7bb88e573af595c68829200514e7e9f8ab25509789d92658bf1800557be340520f980c0bcd7f04ece26a705ac58a4b375cc0e08fdbe146b3319077b3976a55c16035b46e0f1f90ee8c80fdd9e75df77d0010e76466a703dea536e2edf39c74341ef3491ae2aab5ee6a1114b1cb5ca85d41fb35fe7758e76b6e636fdf8d6a1496b6ff15a551cc42589a30c498fa80aa234a77e593501178f7131c7b50c6e2e6a78ffcb161019a3cb3031ed252d4ecb2dd209fcac93684a8f8a8af7bf3de8ef80d4e942c5cb20a6b418c928e6ac61e89b54a5b4f8f48ff22b9adda9ac2e95df44fcd00e752cac741cd1932431ea8c5cd388e233f7a38ce44bfe34439541b09c50c4504be944701db43887e2934d1d5e8a6e95865020a70d8b25e46c582ce31e9de6a63c935d51dbc3d28271adb424c2b03d32007f6b29fd389cfd06e1ab3bd9d1011316c8c31f92cc6e796f9a7e07ecb80c8d0cb97d4fb81d2202178cb29eab037e36facd8885561cf252ba348af68ece6eb4db434e24d508abb31c376d28782fc0537cde321efa3de3f1764c535bd2f0876765653267472f791b4c8a1a6f8a3d3f6aa50ac0959e39ecf1dc2b884e7b",
+      "expect": {
+        "opened": false
+      }
+    },
+    {
+      "id": "open-epoch-relabelled-as-v2",
+      "kind": "roster",
+      "call": "open",
+      "why": "The version byte is in the AAD and picks the keys: a version 3 envelope relabelled 2 opens under neither.",
+      "groupIds": [
+        "11111111-1111-4111-8111-111111111111"
+      ],
+      "epochSecretsHex": [
+        "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+      ],
+      "envelopeHex": "02000102030405060708090a0bab187f5a712cdeddc17233e9d8db7147d69928d71fd6e88c60291f7ca4a3dc9485567d2e4dffb94f160d7ce5b79b43834d19e623fe97704bf40c39c6e266b985a01b43a0c7bb88e573af595c68829200514e7e9f8ab25509789d92658bf1800557be340520f980c0bcd7f04ece26a705ac58a4b375cc0e08fdbe146b3319077b3976a55c16035b46e0f1f90ee8c80fdd9e75df77d0010e76466a703dea536e2edf39c74341ef3491ae2aab5ee6a1114b1cb5ca85d41fb35fe7758e76b6e636fdf8d6a1496b6ff15a551cc42589a30c498fa80aa234a77e593501178f7131c7b50c6e2e6a78ffcb161019a3cb3031ed252d4ecb2dd209fcac93684a8f8a8af7bf3de8ef80d4e942c5cb20a6b418c928e6ac61e89b54a5b4f8f48ff22b9adda9ac2e95df44fcd00e752cac741cd1932431ea8c5cd388e233f7a38ce44bfe34439541b09c50c4504be944701db43887e2934d1d5e8a6e95865020a70d8b25e46c582ce31e9de6a63c935d51dbc3d28271adb424c2b03d32007f6b29fd389cfd06e1ab3bd9d1011316c8c31f92cc6e796f9a7e07ecb80c8d0cb97d4fb81d2202178cb29eab037e36facd8885561cf252ba348af68ece6eb4db434e24d508abb31c376d28782fc0537cde321efa3de3f1764c535bd2f0876765653267472f791b4c8a1a6f8a3d3f6aa50ac0959e39ecf1dc2b884e7a",
+      "expect": {
+        "opened": false
+      }
+    }
+  ]
+}

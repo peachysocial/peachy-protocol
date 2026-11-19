@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+[toolchain]
+# The toolchain every build of this workspace uses; rustup installs it on
+# first use. OpenMLS 0.9 declares MSRV 1.91; we are above it.
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+# No `targets` list on purpose: a host build (`cargo test --workspace
+# --all-features`) needs none, and listing the iOS targets here would make
+# every Linux build download two Apple std sets it never links. The Swift
+# package's build adds them itself (`rustup target add
+# aarch64-apple-ios{,-sim}`, docs/mls-core.md §Building and testing locally).

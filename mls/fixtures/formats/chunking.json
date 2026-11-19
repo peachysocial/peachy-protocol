@@ -1,0 +1,747 @@
+{
+  "_about": [
+    "Golden table for sealed attachment objects: the chunked PSA2 format and its padded version 3.",
+    "Normative: docs/sealed-messages.md §Chunked objects (PSA2).",
+    "Padding: docs/sealed-messages.md §Padded objects (version 3).",
+    "No plaintext is written out. A plaintext of n bytes is the rule `byte i = (i * 7 + 13) mod 251` for i from 0 to n - 1, which every implementation builds itself. Keys and nonce prefixes are given in base64.",
+    "`chunkSize`: the chunk-size rule alone, as {plaintextSize, chunkSize, chunkCount, objectSize}, so it can state a four-gigabyte object in one line.",
+    "`vectors`: seal-and-open round trips. Reproduce `object` byte for byte from the rule plaintext, `key`, `noncePrefix` and `chunkSize`; open it back; agree with `digest` and every entry of `ranges`; and open each range on its own into the right slice of the plaintext.",
+    "`tamper`: take the named vector's object, apply `mutation`, and require the verdict `expect`.",
+    "Verdicts: `unreadable` (the object MUST NOT open, not even partly), `tooNew` (a PSA2 header of a later version: say an update is needed, never treat it as corrupt and never open it) and `notPsa2` (not a PSA2 object; a reader falls back to the version 1 one-shot format).",
+    "Mutations on the object bytes: `swapChunks {a, b}` exchanges two full chunks, `dropChunk {index}` removes one, `truncate {bytes}` keeps the first `bytes`, `flipByte {at}` xors 0xFF into one byte, `setByte {at, value}` sets one byte, and `setU32 {at, value}` overwrites a big-endian u32.",
+    "`paddedSize`: the bucket rule alone. `chunkSize` and `objectSize` there are computed from the padded size, since the chunk size is in the clear header.",
+    "`paddedVectors`: round trips. Pad the rule plaintext of `plaintextSize` bytes to `paddedSize` with zero bytes, reproduce `object` byte for byte, and open it back to exactly `plaintextSize` bytes matching `digest`.",
+    "`paddedTamper`: self-contained objects a version 3 reader MUST refuse, given the `size` and `digest` a pointer states. A padding byte that is not zero is refused even though every tag verifies."
+  ],
+  "chunkSize": [
+    {
+      "plaintextSize": 0,
+      "chunkSize": 65536,
+      "chunkCount": 1,
+      "objectSize": 48
+    },
+    {
+      "plaintextSize": 1,
+      "chunkSize": 65536,
+      "chunkCount": 1,
+      "objectSize": 49
+    },
+    {
+      "plaintextSize": 541,
+      "chunkSize": 65536,
+      "chunkCount": 1,
+      "objectSize": 589
+    },
+    {
+      "plaintextSize": 65536,
+      "chunkSize": 65536,
+      "chunkCount": 1,
+      "objectSize": 65584
+    },
+    {
+      "plaintextSize": 65537,
+      "chunkSize": 65536,
+      "chunkCount": 2,
+      "objectSize": 65601
+    },
+    {
+      "plaintextSize": 16777215,
+      "chunkSize": 65536,
+      "chunkCount": 256,
+      "objectSize": 16781343
+    },
+    {
+      "plaintextSize": 16777216,
+      "chunkSize": 65536,
+      "chunkCount": 256,
+      "objectSize": 16781344
+    },
+    {
+      "plaintextSize": 16777217,
+      "chunkSize": 131072,
+      "chunkCount": 129,
+      "objectSize": 16779313
+    },
+    {
+      "plaintextSize": 104857600,
+      "chunkSize": 458752,
+      "chunkCount": 229,
+      "objectSize": 104861296
+    },
+    {
+      "plaintextSize": 536870911,
+      "chunkSize": 2097152,
+      "chunkCount": 256,
+      "objectSize": 536875039
+    },
+    {
+      "plaintextSize": 536870912,
+      "chunkSize": 2097152,
+      "chunkCount": 256,
+      "objectSize": 536875040
+    },
+    {
+      "plaintextSize": 536870913,
+      "chunkSize": 2097152,
+      "chunkCount": 257,
+      "objectSize": 536875057
+    },
+    {
+      "plaintextSize": 4294967296,
+      "chunkSize": 2097152,
+      "chunkCount": 2048,
+      "objectSize": 4295000096
+    }
+  ],
+  "vectors": [
+    {
+      "name": "one whole chunk exactly",
+      "key": "ASA/Xn2cu9r5GDdWdZSz0vEQL05tjKvK6QgnRmWEo8I=",
+      "noncePrefix": "AxQlNg==",
+      "chunkSize": 64,
+      "plaintextSize": 64,
+      "chunkCount": 1,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAAEAAAAABAxQlNgAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAEAAAAABAxQlNgAAAADqLltcIvuYgGQPS9JAT1dU3Ycn6ohf1dbObNQOiQSvojk41Qe1z3q4wv6NwsAeCIDf86uqI5c2HgbOPHOg6nLRLVRMbECIlUpU1omeeEJD3g==",
+      "digest": "FiZPmhiS77Kv73yjq06M7Pf371HDUGtd22bYPj7c3fs=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 80
+        }
+      ]
+    },
+    {
+      "name": "one partial chunk",
+      "key": "AiFAX36dvNv6GThXdpW00/IRME9ujazL6gkoR2aFpMM=",
+      "noncePrefix": "BhcoOQ==",
+      "chunkSize": 64,
+      "plaintextSize": 40,
+      "chunkCount": 1,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAACgAAAABBhcoOQAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAACgAAAABBhcoOQAAAADM/u7iSfb7Hr95y5LSE/RybtWPvdphH/7rLWf5Fxk/5QHQdfSY2tSI+BGEd4qZsp8LuBTIaDBTAA==",
+      "digest": "sLVha4SvuRIHuBk5c4nz+Z2rc5X1LFcpLf500RpWig4=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 56
+        }
+      ]
+    },
+    {
+      "name": "an empty attachment is one empty chunk",
+      "key": "AyJBYH+evdz7GjlYd5a11PMSMVBvjq3M6wopSGeGpcQ=",
+      "noncePrefix": "CRorPA==",
+      "chunkSize": 64,
+      "plaintextSize": 0,
+      "chunkCount": 1,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAAAAAAAABCRorPAAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAAAAAAABCRorPAAAAADn/Fa0o+dMlARmSu6q5QG5",
+      "digest": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 16
+        }
+      ]
+    },
+    {
+      "name": "one byte",
+      "key": "BCNCYYCfvt38GzpZeJe21fQTMlFwj67N7AsqSWiHpsU=",
+      "noncePrefix": "DB0uPw==",
+      "chunkSize": 64,
+      "plaintextSize": 1,
+      "chunkCount": 1,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAAAEAAAABDB0uPwAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAAEAAAABDB0uPwAAAAC1rBbKkCjPC8I41azNkjxU5Q==",
+      "digest": "nR4OLZRZ0GUjrRPiikCTwjFrqv567Fsl8w66LhE1mcQ=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 17
+        }
+      ]
+    },
+    {
+      "name": "three chunks, the last one partial",
+      "key": "BSRDYoGgv979HDtaeZi31vUUM1JxkK/O7QwrSmmIp8Y=",
+      "noncePrefix": "DyAxQg==",
+      "chunkSize": 64,
+      "plaintextSize": 200,
+      "chunkCount": 4,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAAMgAAAAEDyAxQgAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAMgAAAAEDyAxQgAAAACezms0EtnNnMxRvfJmIFKd8QxWNethOZt8qfYYtNSs0NxJZDv2T7dlhwpGGcl3ZRRsW40HlrhnfK8id2cMQU3j+RY+hUmZ4DHcKgcj4sMJbF3pyZUeGOw2UzZ5UR9tlFK+JCrsjmIIQQ4mF9wTPIYTAplJkVTbFQiaA/A1Ybj7dmfeQ0qsrMG3MrmXTE0bBwjGDO12gQJfR8J8rdHR9T5nMQhlkawam5Da3mEdcg8qVq1jwPMYbXzu6odZ1OBrwJywRLEAhYCy1G+c8j2p/45GioVIQG9XWOcP20YCq2j3Nw69tk2D+9KLXIqd/7+1Wzt/hFfte5iSOPLNzXHJr1oUvY3Omz1ptfI=",
+      "digest": "3+EBE7l8cg93ciNTPig851dXHU36zfuQOTn+I1BVgl8=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 80
+        },
+        {
+          "index": 1,
+          "start": 112,
+          "length": 80
+        },
+        {
+          "index": 2,
+          "start": 192,
+          "length": 80
+        },
+        {
+          "index": 3,
+          "start": 272,
+          "length": 24
+        }
+      ]
+    },
+    {
+      "name": "four chunks, the last one full",
+      "key": "BiVEY4KhwN/+HTxbepm41/YVNFNykbDP7g0sS2qJqMc=",
+      "noncePrefix": "EiM0RQ==",
+      "chunkSize": 64,
+      "plaintextSize": 256,
+      "chunkCount": 4,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAAQAAAAAEEiM0RQAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAQAAAAAEEiM0RQAAAAD10+ImrA/KrFxVJxNUBax6906TTG1sxsEKTdedwfyetUwvKmVieq6hOTjDQPzGxknIY+/bTxAqwXyxY/4LN6jUmvYLEppDjh36BVF3DXGaY96oFGqfIRHq8k64VIpvvnWl3eKDkDkOayVd72FE8CeSXixBUbQYy8zO/oVGJsbJfP9GK/YVp5GXRuRorqlxSTssJeWJD/9XBxEwfas077fFLEQq4fYwcQOYDTXjoFeexAfD+K9sCPn8pn1bHR289Kev6wma223T38QvAeQ5ZIM5J6tPIb3BhqRM9lBBp7E2hPwAGoAvHxETEp85OAjpEdxmwbZWKyC2AGiJSxsbob5bXmQRYdlZA8fB60mWfaCjWiO1FPgvoEhW4ssH70gDcwAMysh0aXlsSGAtXpea/Z1uHdz9P18OpRccaBfRrUQYLQ==",
+      "digest": "8xS1iN7TFaKjcT/IxSA6hgnB1TslXnwoD4sYRrzTXbU=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 80
+        },
+        {
+          "index": 1,
+          "start": 112,
+          "length": 80
+        },
+        {
+          "index": 2,
+          "start": 192,
+          "length": 80
+        },
+        {
+          "index": 3,
+          "start": 272,
+          "length": 80
+        }
+      ]
+    },
+    {
+      "name": "a chunk size of one byte, so the index is doing all the work",
+      "key": "ByZFZIOiweD/Hj1ce5q52PcWNVRzkrHQ7w4tTGuKqcg=",
+      "noncePrefix": "FSY3SA==",
+      "chunkSize": 1,
+      "plaintextSize": 5,
+      "chunkCount": 5,
+      "header": "UFNBMgIAAAAAAAABAAAAAAAAAAUAAAAFFSY3SAAAAAA=",
+      "object": "UFNBMgIAAAAAAAABAAAAAAAAAAUAAAAFFSY3SAAAAABRAKUF9nHRKqL20OOywra0n2UlF95fW7NYRRSppTZEWKZjv8Ljwyj7BCJ/q+uwt8EXip1qoGEvcaTpyswj/h4q6j3ZSwIBRD/WJqS7W3nAroWmFhZ2",
+      "digest": "MAKBcQiH597PtQ+Y9F3BtBgO1pRShoPUNxDZuTF7c80=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 17
+        },
+        {
+          "index": 1,
+          "start": 49,
+          "length": 17
+        },
+        {
+          "index": 2,
+          "start": 66,
+          "length": 17
+        },
+        {
+          "index": 3,
+          "start": 83,
+          "length": 17
+        },
+        {
+          "index": 4,
+          "start": 100,
+          "length": 17
+        }
+      ]
+    },
+    {
+      "name": "many chunks",
+      "key": "CCdGZYSjwuEAHz5dfJu62fgXNlV0k7LR8A8uTWyLqsk=",
+      "noncePrefix": "GCk6Sw==",
+      "chunkSize": 48,
+      "plaintextSize": 1000,
+      "chunkCount": 21,
+      "header": "UFNBMgIAAAAAAAAwAAAAAAAAA+gAAAAVGCk6SwAAAAA=",
+      "object": "UFNBMgIAAAAAAAAwAAAAAAAAA+gAAAAVGCk6SwAAAAAxuWSZD/yKym6mf3nwmy7aJvN6bgWawPJgvS1zdMVLg0uCbKZyGJ2u1ZKT+NZdogOB8eRejObIPRgZe5LAU4O2QQZltGUsiQxfBQe37nPZypK3tkIsy/qJSDwKMOwecmz1+Jc1hrlysbGebdJ+ufzs0xBwr793mlPwViF75Jhy4w6nkt2sLjwO6YiK1BnLVFbFFWN393CCj/FriXYuIwSgHfEjw/2l8v3XJBRKG3pqrwBuOlZsATcDxxyiVlvnvFS9qXw+n8aZ/k+k8viDg1eoqzErtTvoWoOR6xffB+el6rG0WfSXt7rXYN4YiAnvaY4aSXvVC8EEvqR1Ys+xyM8/2O0nVzPKT0hryKy6RIvtwxgh3kCsDaU1qrJ/rV0pWkPSLGJLbzNfNSfVyZ+Vz1O631IhFXluFacSxj95qTypLZVXmOVPOnNWWXWTaEkuJw8NlZSi/Btu33KzwQhp0n0VLtptbk1N/X/x1lhHhkthqDCzkmfE3DSxzcQcM4GSmzY3Rs46LHaPsn0J3n9r1WyZUeUaumCfuseiOaH3yg49rI2EeeI9nfKTNZhlzcEp2BIN4BPEYAYTj2kg3rPho8YgXLJApeE+Z189ovdadgCQpYaXtPTjKJDy3bCsvmtrzKavIhEYUANZFDixL+xYBTrmc2um8N/l+9npGJHyLtQHXKH530G4nq8oq+xVFBUOvST3fGTTpgGYQS8f2ZUPdH9CgzozBTLAnP8GAIQ171y4J485DQ0dyw1kMN2FHEWytl0pGOYsdhSloT9KLCfNvgKVxMeo0OHZnqtgCIOdTk0Moe9pgGPZfeCQNgcsic2/6vJNsE2udOFVwCgk0Py5Jj1Qk4pXtzF/KzKxg5u73zX49HMp5hfJRjkiLqwBEchaX33ukHteKzTz4z6Lzcgxggznd2UsltFHiRf+jbHlrf78yvx3x+gByBbcKgAlBnPnN180gpAD9xpgXjg47WEBdtMWKI+hjvW/Dj48hsCU+Lt+OHSwH66in9dtwS7BczCcx1FDKavc3kvi5uluaWzw5ymbm/AlZlLrRjA+a8syeu81aIrXkIaYNOBN9hUaw4t9ss/hoD2dPSrL0fdcj+7+V+q0EJh6iZvDjHY76W1/4eujwtTmS6ay3weYkSLxG/qjCjbiJv00L6+XE7GugwRYKFpmNe7Kji2fNEChC36lFhhfjJYTNhkQe2bKn39zCuqLOZxf+DySv5yL5zP2DtrrHBHA47RhYTjsGOZ8F0GNsyjl/CA0fpmfDxEmkYhA/jB0XfjBEYUN+F7oDCfHHKP8dVnJfDXce6j5LeuY65J0/isf8lMT+cTEsddpLQkl0NarYNi/mSN8SBIJto/lRGZf3Qeh1juBha19+C5x5bTILeiXi5XffV6owIXIAq98345tTT/ESBPGRhiu4zh6goxaa7hyp6SjJ6gLmzIhL8Hva/svtCGEfxYhUH0M/tADqruGapXmGYPAVYv98NOQ3K28Z2sXjqIiw6EnMhzC31M+vACA2sTWla3jteNeGReB+gxEiTTcCpqrmvvh57e1/R3IAozY8gsPAMmhcB2Eoyba9ZxRsPdyVRneG6qRmGJqknkOclG3wJ9W+7+8JPqcwgvLmdSK77033ZCETfDUNym5vhQnjZ412lzeRMIw6AU4YvVSGchhZy0AG5mwyIt1n9JwjuCD4QzImEmzWPauKVD3Pjr5IO3ePXW2q+KTMid7Fkd2tkUin23ZNQByULgMvEbtnbmcEUQUe+BJljYwR86dQj9GReVVgHdwMTc6",
+      "digest": "7xWiWLUzpT/GN63gdkBLurtyOjEzA8vMaWGORSe5xIM=",
+      "ranges": [
+        {
+          "index": 0,
+          "start": 32,
+          "length": 64
+        },
+        {
+          "index": 1,
+          "start": 96,
+          "length": 64
+        },
+        {
+          "index": 2,
+          "start": 160,
+          "length": 64
+        },
+        {
+          "index": 3,
+          "start": 224,
+          "length": 64
+        },
+        {
+          "index": 4,
+          "start": 288,
+          "length": 64
+        },
+        {
+          "index": 5,
+          "start": 352,
+          "length": 64
+        },
+        {
+          "index": 6,
+          "start": 416,
+          "length": 64
+        },
+        {
+          "index": 7,
+          "start": 480,
+          "length": 64
+        },
+        {
+          "index": 8,
+          "start": 544,
+          "length": 64
+        },
+        {
+          "index": 9,
+          "start": 608,
+          "length": 64
+        },
+        {
+          "index": 10,
+          "start": 672,
+          "length": 64
+        },
+        {
+          "index": 11,
+          "start": 736,
+          "length": 64
+        },
+        {
+          "index": 12,
+          "start": 800,
+          "length": 64
+        },
+        {
+          "index": 13,
+          "start": 864,
+          "length": 64
+        },
+        {
+          "index": 14,
+          "start": 928,
+          "length": 64
+        },
+        {
+          "index": 15,
+          "start": 992,
+          "length": 64
+        },
+        {
+          "index": 16,
+          "start": 1056,
+          "length": 64
+        },
+        {
+          "index": 17,
+          "start": 1120,
+          "length": 64
+        },
+        {
+          "index": 18,
+          "start": 1184,
+          "length": 64
+        },
+        {
+          "index": 19,
+          "start": 1248,
+          "length": 64
+        },
+        {
+          "index": 20,
+          "start": 1312,
+          "length": 56
+        }
+      ]
+    }
+  ],
+  "tamper": [
+    {
+      "name": "two chunks swapped",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "swapChunks",
+        "a": 0,
+        "b": 1
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "the last chunk dropped",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "dropChunk",
+        "index": 2
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "a middle chunk dropped",
+      "vector": "four chunks, the last one full",
+      "mutation": {
+        "kind": "dropChunk",
+        "index": 1
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "the object truncated mid-chunk",
+      "vector": "many chunks",
+      "mutation": {
+        "kind": "truncate",
+        "bytes": 300
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "the object truncated at a chunk boundary",
+      "vector": "four chunks, the last one full",
+      "mutation": {
+        "kind": "truncate",
+        "bytes": 192
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "one ciphertext byte flipped",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "flipByte",
+        "at": 40
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "one tag byte flipped",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "flipByte",
+        "at": 97
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "the chunk count in the header lowered",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "setU32",
+        "at": 20,
+        "value": 2
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "the chunk size in the header changed",
+      "vector": "four chunks, the last one full",
+      "mutation": {
+        "kind": "setU32",
+        "at": 8,
+        "value": 32
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "the nonce prefix in the header changed",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "flipByte",
+        "at": 24
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "a reserved header byte set",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "flipByte",
+        "at": 5
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "the magic changed, so it is not a PSA2 object at all",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "flipByte",
+        "at": 0
+      },
+      "expect": "notPsa2"
+    },
+    {
+      "name": "a version from the future",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "setByte",
+        "at": 4,
+        "value": 9
+      },
+      "expect": "tooNew"
+    },
+    {
+      "name": "nothing but a header",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "truncate",
+        "bytes": 32
+      },
+      "expect": "unreadable"
+    },
+    {
+      "name": "not even a header",
+      "vector": "three chunks, the last one partial",
+      "mutation": {
+        "kind": "truncate",
+        "bytes": 8
+      },
+      "expect": "notPsa2"
+    }
+  ],
+  "paddedSize": [
+    {
+      "plaintextSize": 0,
+      "paddedSize": 541,
+      "chunkSize": 65536,
+      "objectSize": 589
+    },
+    {
+      "plaintextSize": 1,
+      "paddedSize": 541,
+      "chunkSize": 65536,
+      "objectSize": 589
+    },
+    {
+      "plaintextSize": 540,
+      "paddedSize": 541,
+      "chunkSize": 65536,
+      "objectSize": 589
+    },
+    {
+      "plaintextSize": 541,
+      "paddedSize": 541,
+      "chunkSize": 65536,
+      "objectSize": 589
+    },
+    {
+      "plaintextSize": 542,
+      "paddedSize": 569,
+      "chunkSize": 65536,
+      "objectSize": 617
+    },
+    {
+      "plaintextSize": 568,
+      "paddedSize": 569,
+      "chunkSize": 65536,
+      "objectSize": 617
+    },
+    {
+      "plaintextSize": 569,
+      "paddedSize": 569,
+      "chunkSize": 65536,
+      "objectSize": 617
+    },
+    {
+      "plaintextSize": 570,
+      "paddedSize": 598,
+      "chunkSize": 65536,
+      "objectSize": 646
+    },
+    {
+      "plaintextSize": 598,
+      "paddedSize": 598,
+      "chunkSize": 65536,
+      "objectSize": 646
+    },
+    {
+      "plaintextSize": 599,
+      "paddedSize": 628,
+      "chunkSize": 65536,
+      "objectSize": 676
+    },
+    {
+      "plaintextSize": 1000,
+      "paddedSize": 1029,
+      "chunkSize": 65536,
+      "objectSize": 1077
+    },
+    {
+      "plaintextSize": 4096,
+      "paddedSize": 4269,
+      "chunkSize": 65536,
+      "objectSize": 4317
+    },
+    {
+      "plaintextSize": 65536,
+      "paddedSize": 65760,
+      "chunkSize": 65536,
+      "objectSize": 65824
+    },
+    {
+      "plaintextSize": 1048576,
+      "paddedSize": 1061249,
+      "chunkSize": 65536,
+      "objectSize": 1061553
+    },
+    {
+      "plaintextSize": 16777216,
+      "paddedSize": 17124223,
+      "chunkSize": 131072,
+      "objectSize": 17126351
+    },
+    {
+      "plaintextSize": 94371840,
+      "paddedSize": 94457517,
+      "chunkSize": 393216,
+      "objectSize": 94461405
+    }
+  ],
+  "paddedVectors": [
+    {
+      "name": "an empty attachment pads to the floor",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG+Orcw=",
+      "noncePrefix": "ITJDVA==",
+      "chunkSize": 64,
+      "plaintextSize": 0,
+      "paddedSize": 541,
+      "chunkCount": 9,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAAh0AAAAJITJDVAAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAh0AAAAJITJDVAAAAADmjbSY4xcTQzVklbkiBWSQgDIsL19qdVd6DgkMxfjHnNujocxMTE9gPjqM4xZqIXZIojdpKHnsXhRWeQ56cFIV1q1tXBhYBiPBhJz4NadC+v0CM3H6KdMQJTYAmw5IjGixz0uNnJgw4nQz7pV+Vi1guOTH8tWSDSLgF/odeR3Cc187REu3zV6ZeirItPbueFoNz78we8hh/k94Vyo2usEvkZ8ZRxYOHsLCeyfmAkgp8SEh2gTOpgk7x7ueO/0KjGN7kghU0Rv0htbGM0JuupAG1ULKr5euyaaUXjWkoJbIXc/7QaqnRAc+MkibIlmY0fz9AIMjlG1pUZjXXZ4NPBe6WapxtnIhpSwyWb8W090wuUqs8zhmA8V0qET/zgoJljOwmAwYhU0n3oL/S/csST906HMKsT03MHAnqHQioJ3l8rxIn6VyNygzDl9wsbPfD+z206zLZmQBw+Y6X9+49J13Lv3wUyNqS7pN3IpN+d36gWNMAd8MHg3xSODX/IUD0BeZ5tdmHWUVo9KwQtAAGzr96JnNK8pJYUOnkTnoY3Zxon9pEVmI+Z+DJ1hZU2CfWm0w+45cKofrjtbuDD6dGtV1w7lvGkfMO6pYh3b+v0tk2qY/QC1TIFm5wUJNluQigegYI5/TnpfQ5gVYZyiXJvHjHbCdgtztpZcrnSMKWlqehEvMHgHqw0SB5VQRnwhELNuUSY9zpioA9GC4ve4m1wXaiDhry7XPyaXSCup9u9nWy3WDE7oneQlDFqqZqYAcCEZU+okBhhSBgPfuZGW2pX5HswDuOtcSePangjX7Fw0ESRK5ZgSJbBkLyJs/6pSA8pp2MScC789snLzQcxsCQUspzmZHuESLCGMMXNo6rXtnTGEtWbZa5BQzNy4j7VHUshYvbUpfjQe/9iIUn4U2",
+      "digest": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+    },
+    {
+      "name": "one byte pads to the floor",
+      "key": "DCtKaYinxuUEI0JhgJ++3fwbOll4l7bV9BMyUXCPrs0=",
+      "noncePrefix": "JDVGVw==",
+      "chunkSize": 64,
+      "plaintextSize": 1,
+      "paddedSize": 541,
+      "chunkCount": 9,
+      "header": "UFNBMgIAAAAAAABAAAAAAAAAAh0AAAAJJDVGVwAAAAA=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAh0AAAAJJDVGVwAAAACNicKeTjYFQyyXiXyW7RwhFzbITuaQeQRKdsTnsqle6JsuCDhpLaqFjk9lkBVNWi5abcsPpejKhauWFtj2/+FEy4PW82f68dxtY8GXpgNRxwaT36fUZjr+gVnBdOsxG5KqGrZRpLBDhpiBqwyjYbgqeYa0dNjuKesS4LlppU14Moilgp+30gEB33ji3HeG6mtJ1F7r3Ao8ZhfOmsPhW8OH6hViW9NrKv8F8c/64IvAxUZ/YyJ89AX3sX645ApECu25AK22gtQZdaRegjHsTw1uGJdYZrmBtowYceOMgbWRxJgOdapdAxC31DAOrL8lAS9Abx4FGglLxmtxUqq/AMBsKC4uYgHcTDAfjQGf/GrwS3oinchPkN3gFvS6uQFqNROm09vHe2CVEhDhPrqVVNr99F5L4Sw8NoxytwKtZHTRWJMHWHMiIpXXQnidxLvYr4oclLlfElVl6/UhcdxNGLiWJq1Hj6V5ZdOPAWJap4Zuo6WiW0vMXJYg3tYzaD6B8FpZSfdOWZqmaYcvqpR6/X+MboESe4pHfs/AbbEkI/mkBMpUmKF1anrkjlu4PwNEx1ghIhYXu2mNX7CXHoF5Ab0tcFmdQX39T/W/x3U0yMFdUsB01Q7tCa7dXTIj2sVNK6BsRreluokB3bQN+u20tfNTbxi0vgYfGgqVwYj3pUFVOw52LhwKN27PPimKecRLzameP7Z89L0MC4BjLjroyBuwMqoMRtOccE5MqQPs5QqjGJi/U67C0sV2F8wYoG/CmDyBZ1ZPZQEbcxDwCr+uXx11mcKBPLOf3ldakSyD0PUG0YlLv2pXXdj9HJStaOHr2u19VdtM4idH34itBJOxlwYN9wM+62nFfMH5B45GjChld4UZmI45geHm+Dhb1zXwBaHGh76qbwM6a8QZtFV6",
+      "digest": "nR4OLZRZ0GUjrRPiikCTwjFrqv567Fsl8w66LhE1mcQ="
+    },
+    {
+      "name": "exactly the floor needs no padding",
+      "key": "DSxLaomox+YFJENigaC/3v0cO1p5mLfW9RQzUnGQr84=",
+      "noncePrefix": "JzhJWg==",
+      "chunkSize": 128,
+      "plaintextSize": 541,
+      "paddedSize": 541,
+      "chunkCount": 5,
+      "header": "UFNBMgIAAAAAAACAAAAAAAAAAh0AAAAFJzhJWgAAAAA=",
+      "object": "UFNBMgIAAAAAAACAAAAAAAAAAh0AAAAFJzhJWgAAAADFBKVuaUYev+7Dhmwjvuiqb+UMow2OS8jJ6BjWOWlqcHj6ahP75m3BFEXqjPjkmOXF6MVVGODEnfJGHqtCvi1csPuzq414ob/9sRRfnoBnS3p0VXNz63gz+DNf4DY1GFQG/OhoIPWQ7HzVPyVi2X4+iZfOcvMd1tS8CT5W/SdCrxbaPjHdzcz2YYRiRGLohj8mryK3kY+vIdQlyOoP7Oi0oa4dTY3naCvnXE8LDf+LchhRPpH33evVDUhWAjNz0jjUQr52peZBqCyENpnhs5lUfxJALdk+8SS4Pxzrs0BIZYnufBf8ssieVbAAoUtsZIF9A3j6fTzB7rmbIKiqKAekWtcJqL8HkXmWPqxtZT+9Iwa+nC/+BUxjwOiZc/OJv/UE9LZAs/+BNBwZCZABUIVUTUIRj9X+GnYF+S8VRBvtqW579pS6m6OMJFPME5IDkoe8TKdqipCtryS5fpDjTfvOw+bk9yp/SiPVbhkfqf0VgGpOY3a5vZ5xVYPGPpebvLOsuXIRJxs9QssRY2sdu2Csi0g+Cnvz7SoVEWwONAtkGhmpVOGE5loqCpmEa+JjIwUN4em8QSWuSbjJjC6jWq/LnxXMD+uwYKUnP8wfPuknHNbWr1Y2XY2FZfeAnZfk7es51WHSWD6dul++9RM7yLpivustw6bx5+kE3xaXPYEA1WCT5xlZisyaUkzYNGAwXH8hiNLao06fXIaw0EC6pkqU3CmN8b5nEvz4sptH23qxaCb6di/1256k4YKHN79DhkRsB9NrD/JzXTbMQBBjMcskridEJdXUyAI9zuoh9L46/JilBbtm9IedmNY3tRE=",
+      "digest": "ysaUL22L0EssP/mq98wCIG/Ne/A2RRzcrKateb9HRpI="
+    },
+    {
+      "name": "one past the floor pads to the next bucket",
+      "key": "Di1Ma4qpyOcGJURjgqHA3/4dPFt6mbjX9hU0U3KRsM8=",
+      "noncePrefix": "KjtMXQ==",
+      "chunkSize": 128,
+      "plaintextSize": 542,
+      "paddedSize": 569,
+      "chunkCount": 5,
+      "header": "UFNBMgIAAAAAAACAAAAAAAAAAjkAAAAFKjtMXQAAAAA=",
+      "object": "UFNBMgIAAAAAAACAAAAAAAAAAjkAAAAFKjtMXQAAAAA6Lnr80CGmBaQkL2vYHTx8kRHN3ZxIiJd9W/flKiWuBREvcSZqzNJEdFwICuWS8thnkcoJC0WP2HIocKysz9i2n4cMnzzENbHLS+fVrlrmYv135EYuppdAf0nT7CRm+QhydfdwBiYzcOHiswZ3e92htdkxyoAbe/fU7srCs+CKmKHvinlo6C8z5pdc4ltEmwAblz5YdkJevbNa7d93DMAnRDeDTTx8TMOklYX+Zwupu0zTj/zxK1IW3+2WywX2tgy7+DcM/P8zTFAW2GkrORuUAJjCpnz51825UOzyx+hi+GZXJwtkCz9LgN0XT3k/ibNZbCgYbP4cjxlC7lSB/kf2QKLmwmnqjXmLYt8/rDlS0i1BB5l9DVvCL8k9HReEIIutAgvbuPo19s2anoYZNaZSgooEbADaZPM+IFEjhyOt8lEYd2jMNwR9D8pK0sYXNe7IM8SNoIAPE3poCr8Cu3NASIUBRnHCKXoxiPz0fx/1oHi7sEEEyUW/M40iBrIs4vjOXlUqUJ3/mo5w4ysVL/2fVPir8tKbzsKO/qRD1crq1L2OPoE9mXuak7ZrLlkkUVom2zj0bddzpKnYKzC8h1in+Mu7vd6MkfNyjkPE9H/xP94JX8eBLGumt7O6htQrvOVOrhvDDJtrlB0WHSAY1BHBYdaIA60NMbOpX9DYqA4heV5eZSc77yDA66s399pIaAqD14wMnYwr2tNQz6FJwhqWnlv3IqOjaRJ3PNU69HP8rKnKVEpE44Tj6wVgT4ki7xuBltSKuxbP4JFFlq9S1UaV4PCoq7kusnbRlyPXXmRDSd+VFVbSes/7MWf/6ysv059EsNYKFAMQbHjnzcL/LN2XZu5g0qxyW2zp",
+      "digest": "zOS8mv7/Txxcxcn0IeP0Ifsx+xssByB52r4BkGk/lSc="
+    },
+    {
+      "name": "padding fills whole trailing chunks",
+      "key": "Dy5NbIuqyegHJkVkg6LB4P8ePVx7mrnY9xY1VHOSsdA=",
+      "noncePrefix": "LT5PYA==",
+      "chunkSize": 32,
+      "plaintextSize": 100,
+      "paddedSize": 541,
+      "chunkCount": 17,
+      "header": "UFNBMgIAAAAAAAAgAAAAAAAAAh0AAAARLT5PYAAAAAA=",
+      "object": "UFNBMgIAAAAAAAAgAAAAAAAAAh0AAAARLT5PYAAAAABDYhmrCRCER8o4iXt3YokLGV1nZaVo+UcWVJkKqF4CFHzQZHzOti1gZP1K6ulj75iAtPj636r7bvFOybAHDSS+0YsZSZ1fSdu9e5G7T7m92WHT2Sh9Bz6KBeTRyFMugs3FjECx+W65aLPb6dfd1o4lzeR60HqCZYQrmSxJ9RGP+8LdWknT3PA7sB5G5/oCdb8tl3mZlGAHlq1lFVfWCdVNYw8eB8sP1EA13Y13A6RD+KQ49gJ5YohwrMfMWER2OtlfqjGnB1bgk9iqvtgvib/dteW56fpUdIk8FyHl+VXaYg9qsfuZo1tg7dbkIWlZGt5MNBE53BieHQTNMw3PLQMH7W3wft0vCzyvjuZlIF0DlEIIiPCzT8fbk6n4CGf91dOuNjkVtmC/KMsDt1g1s9AMFnxENWC58CaFl+lb6YO/G3pitaugUAeXqGReCS45GLuNq6GFjrRzMPSVZnoM4RRK5JspF2g/78o8TkpyMuLF6SvBUmvOffNiDPgL5XbbuFObjLp/xK8SX2M0wLH2j2OHAebhcM2hNIfew4Lm5wWSwgn/ICzqF8kEwq7dtJ3OgnUx1TdTt43r0CR7mQg+lmCInnyqCN+24PYRWxj9XLJ4MXc+tj+lL+c3z4ew6e5RgMNBBDjY4gzM93UrdpzT7UdfrDUwNfgffYxL/hxKDpGUfCbColZSvr0aVc9WI4iNbQw5u4KVa0+hXOFBZyUazjSq8xrBtbGlOPRWsCeLs3K5xlp4bapCsWw7IzF2CRIEX4Kr0ojmrkgMhPCUh34uk86+xtOJ9zAfyeZrBMKP++eLpWSyOyZFPYVFHF9sx8TQQGJiW0FzBmLEY/xSfYtywiK1ha5F/pGcFfkwjKkSyFz9lK4qIlwvM4hpMXauBfA3wApax3OIwe9zqRf02B24wExbneKpSZ7/ph+ditiIMgZ2N/WCjkqD3PakIGKvtCS8Loyh9AunEOp/EBukru6SEFZs3yjWaXLCO05EXOWDPk7bbT1khuYEZC4p4ZkRCw/uTT/0M6ZgBuVVkl+PUbS0wuFYh6zuGm9gaD3buCrRLO77dN/ZN6A+jGazlK+wPdM=",
+      "digest": "4A7xBq04XRDNPOGvS3vYln8KeEjT71V1S4wGOl6O2L8="
+    },
+    {
+      "name": "padding starts mid-chunk, several buckets up",
+      "key": "EC9ObYyryukIJ0ZlhKPC4QAfPl18m7rZ+Bc2VXSTstE=",
+      "noncePrefix": "MEFSYw==",
+      "chunkSize": 256,
+      "plaintextSize": 600,
+      "paddedSize": 628,
+      "chunkCount": 3,
+      "header": "UFNBMgIAAAAAAAEAAAAAAAAAAnQAAAADMEFSYwAAAAA=",
+      "object": "UFNBMgIAAAAAAAEAAAAAAAAAAnQAAAADMEFSYwAAAABZ6yFfW6rkO5FeL7xAOKOX5VMcvY8Qy5AP5vWp9e49PUc0Gzb8dk/HiAp7uzUcMTV20y/xll3OCL/C3cWG+oHwLb+iM6wcWM70qzwJdRM5zIPEjyhwESZeU0v7kJ/b85VuLIOayEtTDpSbaUMvJ8INylj3F2+3I7uPREbJbLrhf0Gz/rAifF3Coys0XwZck7t0fpmZs1klazoW5vGQijNd7mAIAgoNWMQ9AobWSR5sy30z2HVPIGFRcuQr6b1RLDNw43nikoSX9VZLm2g/nImslAXjFCeprqC4YCs/9w3FwG/a3lDvT4VSl2bYL/pzVVzcQE9K/1PNqdn0dGbuN6aOIBsz0bfDHdFgI6I8eAnvzQFEWg50SPFGw8Z6JkO6+T0q7pXM25JaVNpowSMI/5DpTxHlvE7iJhXIE2C6mbIyTih/pdqDAQZEIYQWwP5Pr9FT82Hfy83+Mw+0mmRV/o4q9oiEFDLu5YSXXpKPHKs1x3RbDZRAe1Qphp5wilYT6MheM4/wknPM5uH2HyN4fgXSGdm7vC/uLoy/j4t2oV8D/iaALUCIgO89rxWc0oNFXYNjb7JSnBiRkadQKnBVNNVoehliyjUfXGua2zK2RFLWGrdEJ3zBigZk7i9x/YvVdhgWoKBrQW36Rn2G3GFnRoi3wQ/sQcn5/xYadonLywtffY4I9mBiVGHKrCjx2nnJC/XUXDzjb8RRZd7M9Ar7e4+Be3qtOYo7m2r8QKmp363duQZvGp1lHvhL/4+jz4dbgYqubv9iYZqr1s336qZgH/1xWJPmgd2bTOcxkhjYlYfkxgt151ACPaCmmQDjVCos4WSnVCGX4w9ep1HELyTHaV/rq1/SVCHQ3AgqXKihNCn2W6n5y/UFLzhp/jiaHZBHYQlTuC0o",
+      "digest": "pThGpDeFMGZKK33PJdElaGi4XG3a5aAdovjY/cxkZX0="
+    }
+  ],
+  "paddedTamper": [
+    {
+      "name": "a padding byte that is not zero",
+      "key": "FTRTcpGwz+4NLEtqiajH5gUkQ2KBoL/e/Rw7WnmYt9Y=",
+      "size": 100,
+      "digest": "4A7xBq04XRDNPOGvS3vYln8KeEjT71V1S4wGOl6O2L8=",
+      "object": "UFNBMgIAAAAAAAAgAAAAAAAAAh0AAAARP1BhcgAAAAAxvAGa24HX5NxNxCIBaTl4JMYBG9bvR20t8dn9xB2Kd/cjAq9sPNW8RwneNeyo3jS6xGK8Ax0xvs6x8yL8Tef47izfmjjmJDuPM/kYyHIwbsO2onTXOw3J4h8OxQqK3yjUIayiTKtwqOOXaVBtSg+DP8/pvVPu6JwM0J2dxYRnWskFlOQsH37ON1Eg1k/2ljbtGS4FlWUYKcuJvM3vWm3GGwok8dWSMdX09mQVOsEctfJbPRfkoUSP3JiN+jcwO+qhnNaBykc7pFt4qiTphmOCNarCrwUJj2Xj9uUdQd8lkUj9EYX5VV/20DjmK7ST9St0j4QEeBEbzyIGVyO+B1qwtQMYHdaduCvnnn1G1OuNP7jskXeLVIYrxtlNolLc8I02lDDYloDC6Ym6LBNcfSGJmERMUwVycHz+CSgXhOrbFU6PPQkJIsyZhxV6qN4Us8xzJcfrSRp8xdHpDTUNcern/8AZ2LbN3GpVdhAfFF3MzNs/6fX6HpaBfwtZLng8FMvsV9jwdcjI2HUk+job4YsmoA6WC/SsAGLev6D9Ehfvkb9HpWbpxwQ6AXt6hXkz7gdLtLvqnQlkaKlihMqzjM74IAuXlZlVeT2gcwY5lxK2hJy7MyjRXuCafY3dnnA8YCkg15AUALYXLRKbPgUCudw9Teg+YmZNPYmS8FKYYNVlPc+VTK43IMcJVgy+PjsuyaQ8yCVALx/VBYH99CXxHijSRNMYmDMwEupOG34sYgoyfcq7BQ0RrYQdr8NMlgg/Udgb1oKI7z18rauKW0rT2P4YmGYkfAkMQfTIgzmAnAnJuguFsvYVBn0xc+bL6MYmOj5Ai6MU8OIxcylbqFhu6l5M0ATJsaNC0CCYxatmg5Z7Es66aAY/2lN/5CZdx2YjhYx41CNWjRNwUo4Ilh/cBFCBSkIocBabl63zEIyNobd6zswETqaa0Yh633qEhJG5l7um2SwNgP8asf26+0pZrD3Q0AqVgcBPBrBS462v2P55jjXSKHx3CD2aBttTxPDygmx7GaV3i/iPloL+5PXFDThwr6mh+0v20vA2whQr2IUNW/heZoEaR4ChYyFWBJM=",
+      "expect": "unreadable"
+    },
+    {
+      "name": "the last padding byte is not zero",
+      "key": "FjVUc5Kx0O8OLUxriqnI5wYlRGOCocDf/h08W3qZuNc=",
+      "size": 100,
+      "digest": "4A7xBq04XRDNPOGvS3vYln8KeEjT71V1S4wGOl6O2L8=",
+      "object": "UFNBMgIAAAAAAAAgAAAAAAAAAh0AAAARQlNkdQAAAACGvxWpfvrlnV6Z0Sh5zAEEKY1Oms3b49IKQbOxKFFa+n4J3HY2boQudTrvCoBFfMbmSFa5/I0zMOCapHNb2sIilFhnZzJVO4gRGWKpAv2RfgKPSROcWqCCxvQmqSOfOV99D3w/F1R5LTD98Gg6nFR7B0JiDOT+SJc4co8Pm17NO18fBIQjfXNwKYOZPwj1BJwBRe4L62klz9Zvtem8l/KnLRH4KFDqPevNEbixpEPX+aSW/B3aFA/Zki/G3yr4hMPMek+yqmMx8/FDkSG1zdsfouE+eYeTgJp92slDTvPX8sPAuCAwhEQMYG6gZgOkQZIgG3twcD5bIPQXxyhaQy+s3rwaJ/DNAoi7ghmo0ELAiFHBgeHx/fPHxhkvhfpwV3sz4C9S2cDJ7rUkl5zmhmPzydWB3k5QA8npUeReCtTSjLae0/4XRSErj+YiM17a+LWtUYUF6+2SwTh613a2vSjd5Jwh5ZQD/KLl3NJntZto47coL6ZllJLgFecyX2YluWPCzr1T/KjhlFw7AFQHdjtxHW6OGSRtsoZ/FHUl5JhdxoYAZNtKeB8RnI7pzJgRBj30aiPirziH9ZFrIyU2Wv666oJogA4oxE5XEJ6OS/4H+HKDD6ypjxAZzfAEmOXkecDI8dx4Px3pP9KJtxRoA0UzrB6zlH0yStcrLna/+tkDZWs05PRLDPyuSUUirxcT/4QtuINaMsAQ6rMDywXVJVzyDn5q6cUmLC+iInb+SwI1P9+PKqQbFT6CcB7/lLtF7COo5JEK9w4CMsJQWqnuD7mYRWHIhTx0rObYI+gIryM8oo9Y7ocl1cjPeT00mVlbBE64UC/3B5M1PSTNlBsng2/GyJ+4JOSFPxi4F//0f9oteWXvaqC9LiReNtkpvLP2nVwcNFc3uFbuTAcQpBwNXtlFUkBJ4GaD0xisBEm/NJXgFdjQ3c/S9hQPSKEsQ+jewJX0O3OcMawVxpYrSClWOLmrCA1k0BrJfyfRcMzB6/eo61npqjB6hjt2gWSRX/uKs5XwiQRt4XcHvK/Ms8GBz7XGk+rBI9dbyydzT0MxMv5OmLqPKV5dUiJoXHUUK+k=",
+      "expect": "unreadable"
+    },
+    {
+      "name": "a pointer size larger than the object's plaintext",
+      "key": "FzZVdJOy0fAPLk1si6rJ6AcmRWSDosHg/x49XHuaudg=",
+      "size": 600,
+      "digest": "4A7xBq04XRDNPOGvS3vYln8KeEjT71V1S4wGOl6O2L8=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAh0AAAAJRVZneAAAAABzYhCJu8lPigfSuwlRYrXRNNdFRrg2ECLeulGQienvLSAKoPiWrqvrAweU505MRvbLtk9Zz50h8Ylenys5LcF08sTZJ1q9DaJgOzc12RwU5xrsAZZ7YhbXgxLLr3O56rbg9EB9+2JGLPYungS0/kIP4EarlvIdwpvETQ8xWWL/L3HJcxIsyV+G9ztFMqtKqqtOgWfGVG7fl+yUFqjtmvGdMC0aLQqkPaQIy5rLHwY2fj61DMLaIIp7GpyWIEwhDQNtBt/k8Uru/1rR8TJhFboeSpKz50SiAfC7AfRrNRKd3a5Gb/ODs0fJLjrsJvW9/GgN2xxGtZu0x7TVXwcej2FZiCTE9d3RSBCiwp7h7pjuRfCIrsZ8Nha+o3fGoNGb7m2Pfi9ST3v65F5OxyZFtszfAsZ0H4sheXRCQB+UXwV7fDhSBDfiv7bTE61kZQYCcJjh0ntTmJQidTCw6KvJRNnfB00+OiVaBxPihCZCA60Ls4zIkgEogNhwa0vq4jmK+tasV3IlnnfLUJfJypg+nBBcICgdHIMP730QroqBFFewr1rdYFW61JzWDLkbvVqfKYTSgt4yK5V9j4kieFV2csBYmWN0unyqmHEXiDmK+hsqVVO65hTuttdY4CCvjKlUCDt6A4U+/SbExbjt350MXhqF1H1saSI4BCh2Zilg8iP8LMrH1deOJBjZuHdBPBja/fvGQViw3TD3La5J703bprfn037elJbR4UC6hWiULnMtbpzo+sPMC/7bRNWXA7a3GzSyrTkEbgw6hWY2t1TLXU5gXjiLBo8xXm6FDId+XLZs/BqiOjrqcpch7/U7rvGbnWjw3lyNcXln+Afn+xIXXzgrOq0IEH/8S7UAUV9Bwf9Dbu3qGvQQvPEI94/p0LgbNH7LleusmsTmIxFqqd8R",
+      "expect": "unreadable"
+    },
+    {
+      "name": "a pointer size one byte short of the file",
+      "key": "GDdWdZSz0vEQL05tjKvK6QgnRmWEo8LhAB8+XXybutk=",
+      "size": 99,
+      "digest": "4A7xBq04XRDNPOGvS3vYln8KeEjT71V1S4wGOl6O2L8=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAh0AAAAJSFlqewAAAABYVi0EiBeac1Sfmv94TNfJW97jQxcJATZXNRqBKiYiKqCzn4IbRh2mGw7YFlglK+QN1Q90IIyRai6dd4DLF4w3haHwh5bkW4bcz3FJlYpj4RVIziNs80H+gtxBm9a8BV/P2qEZlEDry2WTBUYnTuCvK1hzMOoKCqeqkqlDPSuecCTkgK+r3B/oTWhoIctNUcu4FOoTFEQhpZh+oDWkxGTOmDuqKa/Y2n9SfLwn857cccta34gIAQNlHW+KDqYxFeGbDqNMGlQ52bw0oXEMHPy658xLQl83FwWY8XJHmQMRsk8udMmO1zrKI3hq/NulfslzwfGI86RCEvBxPFqWtMg7a7oL5BVFVl3Eo/da/4HxK4hKvCLFeMnmFm7thqwAz14rNfbq10Cj2e1sgZ/iFw5w9nkdHPHtY3h/VzyrcafrmKDJWX8K43mEaZgce5hw/g45O6Pa2rnL6tU3LabAw8Bd4hjaQKjwLKUgdEHu+ntnhjhikzrm8q87AguePf1l3il8N2FSiKFKc3aFw3Xs1HtR1G5wmL/9HL7cv57eb34muniwdcfvBJaj6xBU0fQPgb5f77anF3qUj8Uxt8eHZ6xKiDAreTlMrEK1dsMafAMMC8spElCysBynT9og6sFJx6Fb72NbZwXU7X+5YEiMRETYA/fLpjWqBI6mk9gCzFjKLmaF30HurvV7JTPBZxnTUz/3MqDoYyPgo1Iucyj5EhN9bf/31ob/w6jZXCQCL9cXN5c6B54EcXMiyGRXzWb+idrgI2y7v4qGqynz6j/cwCkH6AxuZsYgDq5EhsDZqsnVb0EWvWamWfS+Cafreg1SnLQIOQowcNyadS0LNcv6YaW4YIbhk1oVC3cnUKSpgHNzHVWHEZgnjugf49enHl/eOaZ2Xh3zeXRl74+KkITg",
+      "expect": "unreadable"
+    },
+    {
+      "name": "a digest over the padded bytes rather than the file",
+      "key": "GThXdpW00/IRME9ujazL6gkoR2aFpMPiASA/Xn2cu9o=",
+      "size": 100,
+      "digest": "2GA5yjBJ2s7A4Ex/lwEmZ3pu+6cwtz3j8TdMzTKQWO0=",
+      "object": "UFNBMgIAAAAAAABAAAAAAAAAAh0AAAAJS1xtfgAAAABoC94NQkC9x2dV4UHEON/s8Bcl564A+W67UOLmZOcI953MyB051NUSGqx8QePXEcWcJGDTlmVKAIBzWXcAk5ZeDfd/ZVINsvb6nCRvJ9wJlqQvDRHxtprH0fjzzz2sGv3pxaLdqNIhJUnf7/x1QtPRex72fmSU1DNp4cigOxabGqWTnZ18MQ1R+CiwxPLiep3aA0CeAuPHxHY23M7vEeVGBf87HJLOGf1YlDcmbD5QYDsbtUhOQT/yfSd+afm/zgmN4Xgo58rK8BeHDDYRGE6lPH2dwFfhfF/mgIH7krordJIzPJ89ZZqs6zsPd/TKpXLvcYept5EDyyYvVaJMUgt0uTpbMDtA9/bCN3LvXFBi6Pk0axmtOe9yb3aRXNHq/yCOHG58qaSdEBGR0EpwdGnvv3xXxkBEpxhvQWvpkGwpE9wmvJzZ9QofZA5Hhceyh9+bhC+fzZDSbguzm57IOb/F1clUcci0dgolYozsVydtHlqDK+0rwyXuVtq5NY7ju44TnoglJbSVE0qppSBLInkXtO7QpZDQcZz5AkJbBB8X7PCr4YugJrm3KGrEgwJSBZm+GDq8YmQ5CMWProaeTrcOVBN9LklIOibfef/usXlj7wxOLye2jWkvOypMNb7VJtsaFuEHIq9fc+yFV+tykNfQzEToAduUOaomC+SH8PihiV2qzUTX4nZgCZ+XB9eWHtEqjXZLiq2Y3YkrtO66PTjqf1eBJlc5fGlZ9PRqjfji48Edj0qL+nLMBcOB6uUy7GbQpbAK6BNLUkopaX811ecP9ABDCKRDExygfPEL0PYBbuYdsU/cuay1dSwj27jp3nGk8yFoESifBmwywSdTUKUPWqkhoondWQx9U85PTjp12BYOYeKDB+lOL35RCh6kMXDytiDZkVaTNqSJbwjz",
+      "expect": "unreadable"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+(* SPDX-License-Identifier: MIT *)
+(* post_removal.pv: a removed device, fully compromised, colluding with the
+   server and the SFU.
+
+   Scenario: A, B, C share epoch 1, and a call runs. C's device is the
+   attacker's from the start: its epoch secret, its leaf HPKE key and its
+   signature key are all handed over. A removes C (a Remove commit whose path
+   secret is sealed to B only) and the group moves to epoch 2; the call goes
+   on there.
+
+   Assumption: B applies the commit the Delivery Service ordered at epoch 1,
+   and that is A's removal (B accepts it only under A's signature). If C wins
+   the race with a commit of its own, C was never removed: the roster still
+   shows C, and the remover tries again. That is MLS ordering, not the call
+   schedule.
+
+   Expected:
+   - every epoch-2 frame, session id and the epoch-2 secret stay secret
+     (post-removal secrecy);
+   - epoch-1 media is NOT secret (C was a member then: a sanity check that the
+     leak is real);
+   - in epoch 1, C can forge a frame as A (member impersonation, a stated limit
+     of per-sender keys every member can derive: docs/calls.md §Keys);
+   - in epoch 2, C can forge nothing, on either lane. *)
+
+free es1: key [private].
+free gid: bitstring.
+free cid: bitstring.
+free leafA1, leafB1, leafC1, leafA2: hskey [private].
+free sigA, sigB, sigC: sskey [private].
+free cs2: key [private].
+free mA1, mA2, mB2: bitstring [private].
+free sidA2: bitstring [private].
+
+query attacker(mA2).
+query attacker(mB2).
+query attacker(sidA2).
+query attacker(next_epoch(init_secret(es1), cs2)).
+query attacker(call_sender_key(exporter(next_epoch(init_secret(es1), cs2), L_CALL, cid), LEAF_A)).
+query attacker(exporter(next_epoch(init_secret(es1), cs2), L_LIVE, EMPTY)).
+
+(* Sanity: expected FALSE (C really was a member of epoch 1). *)
+query attacker(mA1).
+
+(* Sanity: the protocol runs (expected FALSE, i.e. reachable). *)
+query es: key, m: bitstring; event(AcceptFrame(LEAF_B, E2, es, cid, LEAF_A, m)).
+
+(* Epoch 1: expected FALSE. C forges a frame as A. *)
+query me: bitstring, es: key, c: bitstring, l: bitstring, m: bitstring;
+  event(AcceptFrame(me, E1, es, c, l, m)) ==> event(SentFrame(E1, es, c, l, m)).
+
+(* Epoch 2: expected TRUE. C forges nothing after its removal. *)
+query me: bitstring, es: key, c: bitstring, l: bitstring, m: bitstring;
+  event(AcceptFrame(me, E2, es, c, l, m)) ==> event(SentFrame(E2, es, c, l, m)).
+query me: bitstring, es: key, s: bitstring;
+  event(AcceptLive(me, E2, es, s)) ==> event(SentLive(E2, es, s)).
+
+process
+  out(net, (hpk(leafA1), hpk(leafB1), hpk(leafC1), spk(sigA), spk(sigB), spk(sigC)));
+  out(net, exporter(es1, L_SEALED_SENDER, gid));
+  (* C's whole device state *)
+  out(net, (es1, leafC1, sigC));
+  (
+      FrameSender(E1, es1, cid, LEAF_A, mA1)
+    | !FrameReceiver(LEAF_B, E1, es1, cid, LEAF_A)
+
+    (* ---- A removes C: the path secret is sealed to B alone ---- *)
+    | (
+        let es2 = next_epoch(init_secret(es1), cs2) in
+        let body = (E2, hpke_seal(hpk(leafB1), cs2), hpk(leafA2)) in
+        out(net, (body, sign(sigA, body)));
+        out(net, exporter(es2, L_SEALED_SENDER, gid));
+        (
+            FrameSender(E2, es2, cid, LEAF_A, mA2)
+          | LiveSender(E2, es2, (cid, LEAF_A, sidA2))
+          | !FrameReceiver(LEAF_A, E2, es2, cid, LEAF_B)
+          | !LiveReceiver(LEAF_A, E2, es2)
+        )
+      )
+
+    (* ---- B applies A's removal ---- *)
+    | (
+        in(net, (body: bitstring, s: bitstring));
+        let (=body) = checksign(spk(sigA), s) in
+        let (=E2, ctB: bitstring, newA: hpkey) = body in
+        let cs = hpke_open(leafB1, ctB) in
+        let es2b = next_epoch(init_secret(es1), cs) in
+        (
+            FrameSender(E2, es2b, cid, LEAF_B, mB2)
+          | !FrameReceiver(LEAF_B, E2, es2b, cid, LEAF_A)
+          | !LiveReceiver(LEAF_B, E2, es2b)
+        )
+      )
+  )

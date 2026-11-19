@@ -1,0 +1,525 @@
+{
+  "version": 1,
+  "about": [
+    "The golden fixture for the steward key, the commit MAC, the sealed stamp, the head log copy, the veto frame and the repair notice (mls/core/src/steward.rs; not part of this specification).",
+    "All integers big-endian. HKDF is HKDF-SHA256 with an empty salt; AEAD is AES-256-GCM with a 12-byte nonce; signatures are Ed25519.",
+    "Frames nest: envelope (kind 2) -> optional veto frame ff 56 54 01 || BE16(169) || signed veto || inner -> optional carried frame ff 4c 43 01 ... -> raw commit. signed veto = 01 || handle || BE64(E) || vetoed next || replacement next || signature.",
+    "Every build reads all of it and writes none of it (constants.stewardWrites is false).",
+    "Written by an independent implementation (Node crypto), so the Rust replay is a second opinion. Replayed through the fixture door (kind \"steward\") in Rust, JavaScript and Swift (and, in Peachy's Android client, Kotlin)."
+  ],
+  "cases": [
+    {
+      "kind": "steward",
+      "id": "constants",
+      "call": "constants",
+      "why": "The frame magic, the labels and infos, the sizes, the hold cap, and that this build WRITES nothing.",
+      "expect": {
+        "vetoMagicHex": "ff565401",
+        "signedVetoBytes": 169,
+        "stampBytes": 125,
+        "commitMacLabel": "peachy commit mac",
+        "stampInfo": "peachy commit stamp v1",
+        "logInfo": "peachy commit log v1",
+        "repairDomain": "peachy steward repair v1",
+        "vetoDomain": "peachy steward veto v1",
+        "changeDomain": "peachy steward change v1",
+        "holdCapSeconds": 3600,
+        "stewardKeyKeptSeconds": 604800,
+        "stewardWrites": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "public-key",
+      "call": "public_key",
+      "why": "The steward key from its seed (Ed25519, RFC 8032).",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expect": {
+        "publicKeyHex": "0d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b0"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "repair-statement",
+      "call": "statement",
+      "statement": "repair",
+      "why": "What a repair signs: domain, handle, BE64(head epoch), S, V. Ed25519 is deterministic, so the signature is pinned too.",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "handleHex": "11f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99",
+      "epoch": 41,
+      "sHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "vHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "statementHex": "70656163687920737465776172642072657061697220763111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002911111111111111111111111111111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222",
+        "signatureHex": "542db2219bda92f8010c971472949200609bb20d8acda5726bb114efa8d6e79cf6e88bcd1a83faa88dbb32cae847e0fea85bf514ecf52cbba3e1ec0a9eea3702"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "veto-statement",
+      "call": "statement",
+      "statement": "veto",
+      "why": "What a veto signs: domain, handle, BE64(E), the vetoed next verifier, SHA-256 of the entry the frame wraps, the replacement next verifier.",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "handleHex": "11f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99",
+      "epoch": 40,
+      "vetoedNextHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "digestHex": "ed33b7613c44ab015d3fc7d7f9875a27664f4758903097844170c0b4670e854b",
+      "replacementNextHex": "4444444444444444444444444444444444444444444444444444444444444444",
+      "expect": {
+        "statementHex": "7065616368792073746577617264207665746f20763111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e9900000000000000283333333333333333333333333333333333333333333333333333333333333333ed33b7613c44ab015d3fc7d7f9875a27664f4758903097844170c0b4670e854b4444444444444444444444444444444444444444444444444444444444444444",
+        "signatureHex": "df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df03"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "change-statement",
+      "call": "statement",
+      "statement": "change",
+      "why": "What a key change signs, under the OLD key: domain, handle, BE64(the carrying commit epoch), old key, new key.",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "handleHex": "11f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99",
+      "epoch": 7,
+      "oldHex": "0d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b0",
+      "newHex": "8320a51977d8c38ca8a4927c670df5821e449761945e15e9efb26a1509d230ea",
+      "expect": {
+        "statementHex": "7065616368792073746577617264206368616e676520763111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e9900000000000000070d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b08320a51977d8c38ca8a4927c670df5821e449761945e15e9efb26a1509d230ea",
+        "signatureHex": "7a9935a8e62c26e5226dfd095671867306322af020afb8481e11ed87ba00525c53f5e35c0b9128a8adc6528cef9d6ed86646dc74279b06edbab69082013d3408"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "veto-wrap-raw",
+      "call": "wrap_veto",
+      "why": "A veto frame around a raw commit: ff 56 54 01, BE16(169), the signed veto, the commit.",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "handleHex": "11f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99",
+      "epoch": 40,
+      "vetoedNextHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "replacementNextHex": "4444444444444444444444444444444444444444444444444444444444444444",
+      "innerHex": "0001000205aabbccdd",
+      "expect": {
+        "accepted": true,
+        "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df030001000205aabbccdd"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "veto-wrap-carried",
+      "call": "wrap_veto",
+      "why": "The frames nest veto, then carried, then raw: a veto frame around a carried frame.",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "handleHex": "11f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99",
+      "epoch": 40,
+      "vetoedNextHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "replacementNextHex": "4444444444444444444444444444444444444444444444444444444444444444",
+      "innerHex": "ff4c43010100000007000100020102030001000205aabbccdd",
+      "expect": {
+        "accepted": true,
+        "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e990000000000000028333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444446e7e39edacc3991b204365ab52b63c320b1024a44a5bb6f1a8d26fd34c3c0175a649491274ee39a3a2d85f93d314184d41e784a19d1574f609a5503cb5dd7c0eff4c43010100000007000100020102030001000205aabbccdd"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "veto-wrap-nested-refused",
+      "call": "wrap_veto",
+      "why": "A veto frame never wraps another veto frame.",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "handleHex": "11f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99",
+      "epoch": 40,
+      "vetoedNextHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "replacementNextHex": "4444444444444444444444444444444444444444444444444444444444444444",
+      "innerHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df030001000205aabbccdd",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "veto-wrap-empty-refused",
+      "call": "wrap_veto",
+      "why": "A veto frame wraps a commit; never nothing.",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "handleHex": "11f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99",
+      "epoch": 40,
+      "vetoedNextHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "replacementNextHex": "4444444444444444444444444444444444444444444444444444444444444444",
+      "innerHex": "",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-raw",
+      "call": "split",
+      "why": "A raw commit is its own commit, wrapped in nothing.",
+      "bytesHex": "0001000205aabbccdd",
+      "expect": {
+        "accepted": true,
+        "vetoHex": null,
+        "vetoedHex": "0001000205aabbccdd",
+        "proposalsHex": [],
+        "commitHex": "0001000205aabbccdd"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-carried",
+      "call": "split",
+      "why": "A carried frame with no veto around it.",
+      "bytesHex": "ff4c43010100000007000100020102030001000205aabbccdd",
+      "expect": {
+        "accepted": true,
+        "vetoHex": null,
+        "vetoedHex": "ff4c43010100000007000100020102030001000205aabbccdd",
+        "proposalsHex": [
+          "00010002010203"
+        ],
+        "commitHex": "0001000205aabbccdd"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-veto-raw",
+      "call": "split",
+      "why": "A veto frame around a raw commit: the veto, then the commit.",
+      "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df030001000205aabbccdd",
+      "expect": {
+        "accepted": true,
+        "vetoHex": "0111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df03",
+        "vetoedHex": "0001000205aabbccdd",
+        "proposalsHex": [],
+        "commitHex": "0001000205aabbccdd"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-veto-carried",
+      "call": "split",
+      "why": "The veto frame is stripped FIRST, then the carried frame: what every reader (the commit door, commit_strands, peek_message) does.",
+      "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e990000000000000028333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444446e7e39edacc3991b204365ab52b63c320b1024a44a5bb6f1a8d26fd34c3c0175a649491274ee39a3a2d85f93d314184d41e784a19d1574f609a5503cb5dd7c0eff4c43010100000007000100020102030001000205aabbccdd",
+      "expect": {
+        "accepted": true,
+        "vetoHex": "0111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e990000000000000028333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444446e7e39edacc3991b204365ab52b63c320b1024a44a5bb6f1a8d26fd34c3c0175a649491274ee39a3a2d85f93d314184d41e784a19d1574f609a5503cb5dd7c0e",
+        "vetoedHex": "ff4c43010100000007000100020102030001000205aabbccdd",
+        "proposalsHex": [
+          "00010002010203"
+        ],
+        "commitHex": "0001000205aabbccdd"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-veto-nested-refused",
+      "call": "split",
+      "why": "A veto frame holding a veto frame is refused.",
+      "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df03ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df030001000205aabbccdd",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-veto-short-length-refused",
+      "call": "split",
+      "why": "A veto frame whose length is not 169.",
+      "bytesHex": "ff56540100a80111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df0001000205aabbccdd",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-veto-wraps-nothing-refused",
+      "call": "split",
+      "why": "A veto frame that ends at its veto.",
+      "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e99000000000000002833333333333333333333333333333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444df5b0e108927789d8fa7ce40e02ce62732f25d39e36a094666cee9a2dc68093a990a6979a6fe3091a2f061209592adcd8af3ba3b6dcb1a1732415148afe9df03",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "split-veto-truncated-refused",
+      "call": "split",
+      "why": "A veto frame that ends before its length.",
+      "bytesHex": "ff56540100",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "verify-veto-good",
+      "call": "verify_veto",
+      "why": "The veto verifies under the steward key over the entry it wraps.",
+      "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e990000000000000028333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444446e7e39edacc3991b204365ab52b63c320b1024a44a5bb6f1a8d26fd34c3c0175a649491274ee39a3a2d85f93d314184d41e784a19d1574f609a5503cb5dd7c0eff4c43010100000007000100020102030001000205aabbccdd",
+      "publicKeyHex": "0d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b0",
+      "expect": {
+        "verified": true
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "verify-veto-other-key",
+      "call": "verify_veto",
+      "why": "Under another key it does not.",
+      "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e990000000000000028333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444446e7e39edacc3991b204365ab52b63c320b1024a44a5bb6f1a8d26fd34c3c0175a649491274ee39a3a2d85f93d314184d41e784a19d1574f609a5503cb5dd7c0eff4c43010100000007000100020102030001000205aabbccdd",
+      "publicKeyHex": "8320a51977d8c38ca8a4927c670df5821e449761945e15e9efb26a1509d230ea",
+      "expect": {
+        "verified": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "verify-veto-other-entry",
+      "call": "verify_veto",
+      "why": "The signature binds the wrapped entry: one byte changed and it fails.",
+      "bytesHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e990000000000000028333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444446e7e39edacc3991b204365ab52b63c320b1024a44a5bb6f1a8d26fd34c3c0175a649491274ee39a3a2d85f93d314184d41e784a19d1574f609a5503cb5dd7c0eff4c43010100000007000100020102030001000205aabbccde",
+      "publicKeyHex": "0d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b0",
+      "expect": {
+        "verified": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "mac",
+      "call": "mac",
+      "why": "HMAC-SHA256(exporter key, S || BE64(E) || SHA-256(entry)), the entry being what the commit door is handed (here a veto frame).",
+      "macKeyHex": "7777777777777777777777777777777777777777777777777777777777777777",
+      "nextVerifierHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "epoch": 40,
+      "entryHex": "ff56540100a90111f24671bc0857ffebbe2a0d49ac85fd6692a1e90a53908d326465fdc3120e990000000000000028333333333333333333333333333333333333333333333333333333333333333344444444444444444444444444444444444444444444444444444444444444446e7e39edacc3991b204365ab52b63c320b1024a44a5bb6f1a8d26fd34c3c0175a649491274ee39a3a2d85f93d314184d41e784a19d1574f609a5503cb5dd7c0eff4c43010100000007000100020102030001000205aabbccdd",
+      "expect": {
+        "macHex": "3ad6ba18565b1916fb0ee8ed19f3e55a35b0c40f7f0539b8b9095f00b730bd9b"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "stamp-seal",
+      "call": "seal_stamp",
+      "why": "The server seal: AES-256-GCM under HKDF-SHA256(salt empty, the epoch send key, \"peachy commit stamp v1\"), aad 01 || BE64(E), plain S || steward key || MAC; 0x01 || nonce || ciphertext || tag, 125 bytes.",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 40,
+      "nextVerifierHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "stewardPubHex": "0d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b0",
+      "macHex": "3ad6ba18565b1916fb0ee8ed19f3e55a35b0c40f7f0539b8b9095f00b730bd9b",
+      "nonceHex": "0c0c0c0c0c0c0c0c0c0c0c0c",
+      "expect": {
+        "stampHex": "010c0c0c0c0c0c0c0c0c0c0c0ca992c4b2568ea6a652b982437e1c596ef0b0ed6bb07d795be775891253d4e8b3563b4a3f460a4f8256e035e585f72f0f194a1b9fdca7689fa0c2c487aa56a329925bca0417aee8d537c4eab426c250b1c76c8d85ccdd465c01e1822b642ed36253aabeae50650dd25ed88252fcd4b2d3"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "stamp-seal-bare",
+      "call": "seal_stamp",
+      "why": "A handle with no steward key and a commit with no MAC: zeros in their places.",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 40,
+      "nextVerifierHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "stewardPubHex": "",
+      "macHex": "",
+      "nonceHex": "0c0c0c0c0c0c0c0c0c0c0c0c",
+      "expect": {
+        "stampHex": "010c0c0c0c0c0c0c0c0c0c0c0ca992c4b2568ea6a652b982437e1c596ef0b0ed6bb07d795be775891253d4e8b35b4e1a4a08024f2784d7db1007971a7972d125c5c921e20baa704d122dde4099a88d701c41f5f1c3ccca02593f31b5ebf2dc498ab3d87fe4b8e8dd2bd31e6ef90eff7748a37d62d69911b695ca6f8f3a"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "stamp-open",
+      "call": "open_stamp",
+      "why": "A member of E opens it.",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 40,
+      "stampHex": "010c0c0c0c0c0c0c0c0c0c0c0ca992c4b2568ea6a652b982437e1c596ef0b0ed6bb07d795be775891253d4e8b3563b4a3f460a4f8256e035e585f72f0f194a1b9fdca7689fa0c2c487aa56a329925bca0417aee8d537c4eab426c250b1c76c8d85ccdd465c01e1822b642ed36253aabeae50650dd25ed88252fcd4b2d3",
+      "expect": {
+        "accepted": true,
+        "nextVerifierHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "stewardPubHex": "0d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b0",
+        "macHex": "3ad6ba18565b1916fb0ee8ed19f3e55a35b0c40f7f0539b8b9095f00b730bd9b"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "stamp-open-bare",
+      "call": "open_stamp",
+      "why": "Zeros read as absent.",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 40,
+      "stampHex": "010c0c0c0c0c0c0c0c0c0c0c0ca992c4b2568ea6a652b982437e1c596ef0b0ed6bb07d795be775891253d4e8b35b4e1a4a08024f2784d7db1007971a7972d125c5c921e20baa704d122dde4099a88d701c41f5f1c3ccca02593f31b5ebf2dc498ab3d87fe4b8e8dd2bd31e6ef90eff7748a37d62d69911b695ca6f8f3a",
+      "expect": {
+        "accepted": true,
+        "nextVerifierHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "stewardPubHex": null,
+        "macHex": null
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "stamp-open-other-epoch",
+      "call": "open_stamp",
+      "why": "The epoch is in the aad: a stamp moved to another epoch does not open.",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 41,
+      "stampHex": "010c0c0c0c0c0c0c0c0c0c0c0ca992c4b2568ea6a652b982437e1c596ef0b0ed6bb07d795be775891253d4e8b3563b4a3f460a4f8256e035e585f72f0f194a1b9fdca7689fa0c2c487aa56a329925bca0417aee8d537c4eab426c250b1c76c8d85ccdd465c01e1822b642ed36253aabeae50650dd25ed88252fcd4b2d3",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "stamp-open-other-key",
+      "call": "open_stamp",
+      "why": "Another epoch send key does not open it.",
+      "sendKeyHex": "9898989898989898989898989898989898989898989898989898989898989898",
+      "epoch": 40,
+      "stampHex": "010c0c0c0c0c0c0c0c0c0c0c0ca992c4b2568ea6a652b982437e1c596ef0b0ed6bb07d795be775891253d4e8b3563b4a3f460a4f8256e035e585f72f0f194a1b9fdca7689fa0c2c487aa56a329925bca0417aee8d537c4eab426c250b1c76c8d85ccdd465c01e1822b642ed36253aabeae50650dd25ed88252fcd4b2d3",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "log-seal",
+      "call": "seal_log_copy",
+      "why": "The head log copy of a commit envelope: the same seal under \"peachy commit log v1\".",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 40,
+      "envelopeHex": "01000000000000000000000000abababababababababababababababababababababababababababababababababababababababab",
+      "nonceHex": "0c0c0c0c0c0c0c0c0c0c0c0c",
+      "expect": {
+        "copyHex": "010c0c0c0c0c0c0c0c0c0c0c0c1a3d2c9ce38ac19461ad3d3ac5432b84dcca481bc7aeabe6c215f0adf434b5c4831a849e0bf80a118dbf6a5229a315d699193eaf6fb493661f9bc1eac424bcd9557aaf3233"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "log-open",
+      "call": "open_log_copy",
+      "why": "FetchCommitAt: the caller opens it with the send key of the epoch it asked for.",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 40,
+      "copyHex": "010c0c0c0c0c0c0c0c0c0c0c0c1a3d2c9ce38ac19461ad3d3ac5432b84dcca481bc7aeabe6c215f0adf434b5c4831a849e0bf80a118dbf6a5229a315d699193eaf6fb493661f9bc1eac424bcd9557aaf3233",
+      "expect": {
+        "accepted": true,
+        "envelopeHex": "01000000000000000000000000abababababababababababababababababababababababababababababababababababababababab"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "log-open-as-stamp-key",
+      "call": "open_log_copy",
+      "why": "The log key is not the stamp key.",
+      "sendKeyHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "epoch": 40,
+      "copyHex": "010c0c0c0c0c0c0c0c0c0c0c0cb983d5a3479fb7b743a893526fa6e3d44a0a57d10ac7c3e15dcf33a8e96e5209f0e5b1e1a3a9e48c2f7c70bbac3cb1d2d97a8e6e62c2d547e838e0dd49a87f68f376910a6a",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "repair-notice-consistent",
+      "call": "repair_notice",
+      "why": "w is this device own verifier at e, and s differs: consistent.",
+      "wire": "{\"peachy\":\"repair\",\"v\":1,\"e\":41,\"s\":\"ERERERERERERERERERERERERERERERERERERERERERE=\",\"m\":\"\",\"w\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\"}",
+      "ownHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "parsed": true,
+        "epoch": 41,
+        "verdict": 0
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "repair-notice-foreign",
+      "call": "repair_notice",
+      "why": "w is not this device verifier at e: an admin repointing the head. Inconsistent (hold and alert).",
+      "wire": "{\"peachy\":\"repair\",\"v\":1,\"e\":41,\"s\":\"ERERERERERERERERERERERERERERERERERERERERERE=\",\"m\":\"\",\"w\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\"}",
+      "ownHex": "2323232323232323232323232323232323232323232323232323232323232323",
+      "expect": {
+        "parsed": true,
+        "epoch": 41,
+        "verdict": 1
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "repair-notice-needless",
+      "call": "repair_notice",
+      "why": "A repair of a head that named the right verifier (s == w) is inconsistent too.",
+      "wire": "{\"peachy\":\"repair\",\"v\":1,\"e\":41,\"s\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\",\"m\":\"Ota6GFZbGRb7DujtGfPlWjWwxA9/BTm4uQlfALcwvZs=\",\"w\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\"}",
+      "ownHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "parsed": true,
+        "epoch": 41,
+        "verdict": 1
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "repair-notice-unjudged",
+      "call": "repair_notice",
+      "why": "No verifier kept for e: nothing to judge.",
+      "wire": "{\"peachy\":\"repair\",\"v\":1,\"e\":41,\"s\":\"ERERERERERERERERERERERERERERERERERERERERERE=\",\"m\":\"\",\"w\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\"}",
+      "ownHex": null,
+      "expect": {
+        "parsed": true,
+        "epoch": 41,
+        "verdict": 2
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "repair-notice-other-frame",
+      "call": "repair_notice",
+      "why": "Any other lane frame is not a repair notice.",
+      "wire": "{\"peachy\":\"hello\",\"v\":1,\"ak\":\"AAAAAAAAAAAAAAAAAAAAAA==\"}",
+      "ownHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "parsed": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "repair-notice-short-verifier",
+      "call": "repair_notice",
+      "why": "A verifier that is not 32 bytes.",
+      "wire": "{\"peachy\":\"repair\",\"v\":1,\"e\":41,\"s\":\"ERERERERERERERERERERERERERERERERERERERERERE=\",\"m\":\"\",\"w\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIg==\"}",
+      "ownHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "parsed": false
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "meta-key",
+      "call": "meta_key",
+      "why": "stw.k, unpadded URL-safe base64 of 32 bytes, is the steward key.",
+      "meta": "{\"v\":1,\"n\":\"Ski trip\",\"stw\":{\"k\":\"DXVQdU4IAKXSN-71gmA1dmubPloVhoqUCrKJlYeI47A\",\"b\":{\"actor-ada\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE\"}}}",
+      "expect": {
+        "keyHex": "0d7550754e0800a5d237eef5826035766b9b3e5a15868a940ab289958788e3b0"
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "meta-key-absent",
+      "call": "meta_key",
+      "why": "A meta with no stw names no key: the group was never enrolled.",
+      "meta": "{\"v\":1,\"n\":\"Ski trip\"}",
+      "expect": {
+        "keyHex": null
+      }
+    },
+    {
+      "kind": "steward",
+      "id": "meta-key-short",
+      "call": "meta_key",
+      "why": "A k that is not 32 bytes names no key.",
+      "meta": "{\"v\":1,\"stw\":{\"k\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ\",\"b\":{}}}",
+      "expect": {
+        "keyHex": null
+      }
+    }
+  ]
+}

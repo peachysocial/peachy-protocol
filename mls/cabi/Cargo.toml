@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: MIT
+[package]
+name = "peachy-mls-cabi"
+description = "The C ABI boundary over peachy-mls-core: opaque handles, explicit buffer frees, no unwinding across the edge."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+# `staticlib` is what an XCFramework and the NDK want; `cdylib` is what a quick
+# `dlopen` smoke test and a future JNI load want; `rlib` so the crate's own
+# `cargo test` can link it like a normal Rust library.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = []
+# The `pdc1` issuer, across the C door, so a wrapper's tests (Swift's, and one
+# day Kotlin's and wasm's) can mint a credential without a running server
+# or a second implementation of the token format in their own language.
+# OFF by default, exactly like the core's: a shipped `libpeachy_mls_cabi.a`
+# contains no code that can mint a credential.
+test-issuer = ["peachy-mls-core/test-issuer"]
+# A store path with no key, opened in the clear (`SqliteKv::open`). OFF by
+# default and in every archive that ships: such a file holds every group
+# secret for any reader of the disk. The ABI tests and the Swift and Kotlin
+# host test archives turn it on. Not implied by `test-issuer` or `fixture`,
+# which a binding's fixture replay turns on.
+insecure-plaintext-store = ["peachy-mls-core/insecure-plaintext-store"]
+# The golden policy fixture (`mls/fixtures/rules.json`), across the C door, so
+# the Swift and Kotlin replays evaluate a case with the SAME code Rust and the
+# wasm binding do rather than each re-deciding it in their own language. OFF by
+# default for the same reason as above: a shipped archive carries no test
+# harness. See src/lib.rs, "The golden-fixture door".
+fixture = ["peachy-mls-core/fixture"]
+# The core's `development` set of carried server keys, whose seed is public.
+# OFF by default: an archive a release builds carries an empty set. The host
+# test archives and app builds for local development and testing turn it on
+# (`--development-keys` on swift/build-xcframework.sh). Adds no C symbol.
+development-keys = ["peachy-mls-core/development-keys"]
+# The string-list codec as plain Rust, for `mls/fuzz`'s `string_list` target
+# (src/lib.rs, `fuzzing`). OFF by default; the C header does not change.
+fuzzing = []
+
+[dependencies]
+# `sqlite` is not optional here, unlike the core's other two features. This is
+# the door Apple and Android open a persistent client through
+# (`peachy_mls_client_open`), and a build of the archive without it would export
+# a header whose functions depend on a cargo flag nobody sets from Xcode or
+# Gradle — the drift would surface as a link error in an app, not a build error
+# here. The wasm binding does not go through this crate and so does not pay for
+# it (docs/mls-core.md §Storage layout).
+peachy-mls-core = { path = "../core", features = ["sqlite"] }
+# Wiping what this door copies and frees: the seed and store key it reads in,
+# and every buffer `peachy_mls_buffer_free` takes back. Already in the graph
+# through the core.
+zeroize = { workspace = true }
+
+[build-dependencies]
+cbindgen = "=0.29.4"
+
+[dev-dependencies]
+# The issuer, so the ABI tests can mint a credential without a server.
+peachy-mls-core = { path = "../core", features = ["test-issuer", "insecure-plaintext-store"] }
+# A group's head verifier is the SHA-256 of its send key, which the apps
+# compute; the head doors' test does the same.
+sha2 = { workspace = true }
+# The carried server keys' test writes a published list by hand.
+base64 = { workspace = true }
+
+# The ABI suite opens store files in the clear, which only a `test-issuer`
+# build's store door allows; `tests/shipped_store.rs` checks the door without it.
+[[test]]
+name = "abi"
+required-features = ["test-issuer"]

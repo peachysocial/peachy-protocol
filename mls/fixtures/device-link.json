@@ -1,0 +1,2421 @@
+{
+  "version": 1,
+  "about": [
+    "The golden fixture for device_link: approving a new device from one you already",
+    "have: the two-digit number a person picks, and the QR text the specification",
+    "reserves and no client uses.",
+    "The third table beside rules.json (what the GROUP policy decides) and",
+    "credentials.json (what the IDENTITY layer decides about a leaf); this one pins",
+    "the pure functions in mls/core/src/device_link.rs, which are product code on",
+    "every client rather than a protocol decision inside a group, and a fifth call",
+    "beside them - keyPackageIdentity - which is not a pure function and belongs here",
+    "anyway, because it is the other half of the same feature.",
+    "mls/core/src/device_link.rs is the reading guide and mls/core/src/fixture.rs is",
+    "the door a replay calls - the SAME door the other two tables go through, which is",
+    "why every case names its kind.",
+    "",
+    "WHY ANY OF THIS EXISTS, in one paragraph, because a replay that does not know",
+    "this cannot tell a good change from a bad one. What an approving phone signs, and",
+    "seals the account key to, is a PUBLIC KEY it was handed over the network, and the",
+    "server is the thing that handed it over. A server that swapped that key would",
+    "collect a genuine signature over a key it holds itself, and every check in this",
+    "file would pass while checking the wrong key correctly. So the key crosses once",
+    "through the person, as a two-digit number both devices derive (commitment, number) from both keys and a fresh nonce",
+    "from each side, exchanged commit-then-reveal: the approver commits to its nonce",
+    "before the new device draws its own, and reveals it only after. A server in the",
+    "middle then matches one time in a hundred per exchange, and a failed exchange",
+    "leaves a number on the new device that is not among the approver's three.",
+    "\"Per exchange\" holds only because the new device releases ONE nonce per",
+    "pairing (waiterStep): the first exchange it answers binds the pairing to that",
+    "approver, that approver's key and that commitment; the same three continue it;",
+    "any other commitment or key from that approver ends the pairing, which the",
+    "device says was interrupted, and the person starts again by hand; and any other",
+    "approver is never answered. Without it a server, which knows the new device's",
+    "number before it reveals, could restart unseen until the numbers matched.",
+    "waiterStep/a-restart-after-a-shown-number-is-interrupted is that row.",
+    "THE APPROVER'S RULE (approverStep) is the mirror. The approver posts ONE",
+    "commitment per prompt, for the waiting row's key as it read it. The first read",
+    "that lists a device nonce under it FIXES that nonce before the reveal is posted;",
+    "a reveal whose post failed is sent again only over exactly the fixed key,",
+    "commitment and nonce; any change after that ends the prompt as interrupted. An",
+    "approver that took its number over whatever nonce a later read listed would",
+    "hand a server its nonce first and the choice of the other second.",
+    "approverStep/a-failed-reveal-then-another-device-nonce-is-interrupted is that",
+    "row. The approver also signs its commitment over the waiting device's id and key",
+    "(signCommitment, domain peachy-device-link-commit-v2), and the waiting device",
+    "answers only an exchange whose signature holds (verifyCommitment).",
+    "number/nonce-does-not-open-the-commitment is the row that holds the order, and",
+    "number/identical-keys the one that stops a device being compared with itself.",
+    "",
+    "THE OTHER DIRECTION. Everything above tells the APPROVER that the key it lets",
+    "in is the key in the person's hand. The new device needs the converse: that the",
+    "account key it is handed comes from a device the person holds, and not from one",
+    "the server runs and lists as an approver. So the approver shows a second number",
+    "(approverNumber: the same five inputs under the domain",
+    "peachy-device-link-approver-v1) that the person picks on the new device. The",
+    "account-key side of this is in account-store.json (boxAcceptHybrid). qr and",
+    "qrMatches pin the QR text the specification reserves; no client uses it.",
+    "",
+    "KEY MATERIAL IS SYNTHESISED, NEVER REAL, exactly as in credentials.json. Every",
+    "input here is either a repeated byte written out as hex, or a value DERIVED from",
+    "one by the implementation itself:",
+    "  1111..11  Ada's phone, the APPROVING device's 32-byte Ed25519 seed",
+    "  d04ab2..  its public half - signing_key_public_key(1111..11), not a typed key",
+    "  4444..44  a second seed, for the wrong-approver case",
+    "  d75979..  its public half, the approver who did not sign",
+    "  2222..22  the new laptop's published signing key",
+    "  3333..33  Bo's phone's signing key",
+    "  aaaa..aa, bbbb..bb  stand-in public keys for the number; 5555.., 6666.. nonces",
+    "  6f1c2a9e-..  a stand-in device row id for the QR code",
+    "Nothing here is, or could be mistaken for, a key any Peachy environment holds.",
+    "A public key in a `number` case is only ever hashed, and a `signingKeyHex` is only",
+    "ever message bytes, so neither has to be a curve point; an `approverKeyHex` does,",
+    "and the two that are real ones are derived above rather than written by hand.",
+    "",
+    "WHERE THE APPROVED KEY COMES FROM, which is the keyPackageIdentity half. An",
+    "approval is a signature over a device id and a signing key; before adding that",
+    "device's leaf, an adder has to know that the key package it is about to commit",
+    "carries the SAME key the approval named. Taking the pair from the directory",
+    "response would give a server the last word: it could answer with a truthful",
+    "(deviceId, signingKey) for the check and a key package holding a different key,",
+    "and the leaf that landed would be one nobody approved, with every signature in",
+    "the exchange verifying. So the pair is read out of the key package's own bytes",
+    "(Client::key_package_identity), and keyPackageIdentity/the-directory-lied is the",
+    "row where that difference is visible. Its cases carry a nowUnix and a trust list",
+    "because the reader's clock and its issuer keys are what turn the same bytes into",
+    "an acceptance, an unknown_kid or an expired - and a producedAtUnix where the",
+    "PRODUCING device needs a different clock from the reading one, which is the only",
+    "way an expired-credential row can be written at all.",
+    "",
+    "EVERY BYTE STRING CROSSES AS LOWER-CASE HEX, no prefix, in both directions. Hex",
+    "and not base64 because half this table is about LENGTHS - a 31-byte key, a",
+    "63-byte signature - and hex is the encoding whose length a reader can count.",
+    "",
+    "A case carries EITHER an `expect` (the verdict object the door must return) or an",
+    "`expectError` (a substring the refusal must contain). The second kind is not",
+    "decoration: a signing key of the wrong length and an empty device id are refusals",
+    "and NOT verdicts, and a replay that turned either into a `valid: false` would be",
+    "the exact blur this fixture exists to prevent. `verify` is the one call that",
+    "cannot fail - a malformed key, a wrong length and a bad signature all come back",
+    "as valid:false, because a caller that could tell them apart would be holding an",
+    "oracle.",
+    "",
+    "Replayed by every client, each through its own door and none of them",
+    "re-deciding anything: mls/core/tests/device_link_fixture.rs (Rust),",
+    "mls/wasm/tests/node/device-link.test.mjs (JavaScript, through the wasm binding),",
+    "mls/swift/Tests/PeachyMLSTests/DeviceLinkFixtureTests.swift and",
+    "the Android binding's `DeviceLinkFixtureTest` (not in this repository) (the last two",
+    "through peachy_mls_fixture_evaluate_case in the C ABI).",
+    "",
+    "The expected values were produced by running the Rust implementation, never by",
+    "hand. Ed25519 is deterministic (RFC 8032), so a golden signature is a real",
+    "assertion about the bytes and not a shape check.",
+    "",
+    "THE ACCOUNT IDENTITY KEY (docs/identity.md 'The account identity key').",
+    "Three more pure calls, from mls/core/src/account_identity.rs: accountIdentity",
+    "derives an account's public identity key from its 32-byte account key (a1a1..a1",
+    "is Ada's, a2a2..a2 another account's), signAccountDevice is that key vouching for",
+    "one device key, and verifyAccountDevice checks it - false, never an error, for",
+    "every way it fails. Every keyPackageIdentity mint carries its actor's account key,",
+    "because a key package from a device its account never let in is refused as",
+    "not_approved, which the last case shows."
+  ],
+  "domains": {
+    "note": "The ASCII domain separators, spelled out so a reader of a Swift or Kotlin port can check them against the hex below without a Rust toolchain. 'peachy-device-approval-v1' is 7065616368792d6465766963652d617070726f76616c2d7631, 'peachy-device-link-commit-v1' is 7065616368792d6465766963652d6c696e6b2d636f6d6d69742d7631 and 'peachy-device-link-v2' is 7065616368792d6465766963652d6c696e6b2d7632. 'peachy-device-link-approver-v1' is 7065616368792d6465766963652d6c696e6b2d617070726f7665722d7631. 'peachy-device-link-kem-v1' is 7065616368792d6465766963652d6c696e6b2d6b656d2d7631.",
+    "approval": "peachy-device-approval-v1",
+    "linkCommit": "peachy-device-link-commit-v1",
+    "linkNumber": "peachy-device-link-v2",
+    "qrPrefix": "peachy-link:",
+    "linkApproverNumber": "peachy-device-link-approver-v1",
+    "linkKem": "peachy-device-link-kem-v1"
+  },
+  "cases": [
+    {
+      "id": "statement/ada-laptop",
+      "kind": "device_link",
+      "why": "The exact bytes an approving device signs, written out so that a port can be checked byte for byte without running anything: the ASCII domain, 0x00, the device id in ASCII, 0x00, then the 32-byte key. Both the id and the key are in there because either alone would be forgeable into something else - a signature over the key alone replays onto any device row holding that key, and one over the id alone vouches for whatever key the server later decides that row holds.",
+      "call": "statement",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "statementHex": "7065616368792d6465766963652d617070726f76616c2d7631006465766963652d6164612d6c6170746f70002222222222222222222222222222222222222222222222222222222222222222"
+      }
+    },
+    {
+      "id": "statement/bo-phone",
+      "kind": "device_link",
+      "why": "A second id and a second key, so the statement is visibly a function of both rather than a constant with a key stuck on the end. Its middle segment differs from the case above in length as well as in content, which is what the 0x00 separators are for.",
+      "call": "statement",
+      "deviceId": "device-bo-phone",
+      "signingKeyHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "expect": {
+        "statementHex": "7065616368792d6465766963652d617070726f76616c2d7631006465766963652d626f2d70686f6e65003333333333333333333333333333333333333333333333333333333333333333"
+      }
+    },
+    {
+      "id": "statement/signing-key-one-byte-short",
+      "kind": "device_link",
+      "why": "31 bytes. A refusal and NOT a verdict: a caller handing over something that is not a device key has made a mistake, and a statement built over 31 bytes would be signed happily and verify against nothing. The message names the field and the size it wanted, so a client can say which argument was wrong.",
+      "call": "statement",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "22222222222222222222222222222222222222222222222222222222222222",
+      "expectError": "a signing_key must be exactly 32 bytes, got 31"
+    },
+    {
+      "id": "statement/signing-key-one-byte-long",
+      "kind": "device_link",
+      "why": "33 bytes, the other side of the same boundary. Written out because a length check spelled `< 32` passes this one, and a fixture that only ever tested the short side could not tell the two spellings apart.",
+      "call": "statement",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "222222222222222222222222222222222222222222222222222222222222222222",
+      "expectError": "a signing_key must be exactly 32 bytes, got 33"
+    },
+    {
+      "id": "statement/empty-device-id",
+      "kind": "device_link",
+      "why": "An empty id would produce a statement of domain, 0x00, 0x00, key - a perfectly good byte string that vouches for a key attached to no device row at all. Refused rather than signed.",
+      "call": "statement",
+      "deviceId": "",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expectError": "a device_id must not be empty"
+    },
+    {
+      "id": "sign/ada-approves-the-laptop",
+      "kind": "device_link",
+      "why": "Ada's phone signs the laptop. Ed25519 is deterministic, so this signature is a golden value and not a shape check: a port that hashed the statement first, or reordered the domain, produces 64 perfectly valid-looking bytes that are not these.",
+      "call": "sign",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05"
+      }
+    },
+    {
+      "id": "sign/ada-approves-bo-phone",
+      "kind": "device_link",
+      "why": "The same approving seed over a different device, so the pair proves the signature moves with the statement. Its verdict is the input of verify/second-round-trip below.",
+      "call": "sign",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "deviceId": "device-bo-phone",
+      "signingKeyHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "expect": {
+        "signatureHex": "716c7c978459c237f16290e744c806ac0aafe8984dfb572a3da502baf36c7f7faa9e7315fb90f6d02475521b19aab73f1049c651a6ac02926640cbde55f2fd03"
+      }
+    },
+    {
+      "id": "sign/seed-one-byte-short",
+      "kind": "device_link",
+      "why": "A 31-byte seed. Refused with the same sentence mls/core/src/identity.rs uses for signing_key_public_key, because it is the same seed and a caller that got two different messages for one mistake would go looking for two bugs.",
+      "call": "sign",
+      "seedHex": "11111111111111111111111111111111111111111111111111111111111111",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expectError": "a device signing key seed must be exactly 32 bytes, got 31"
+    },
+    {
+      "id": "sign/empty-device-id",
+      "kind": "device_link",
+      "why": "The statement's refusals reach through sign rather than being re-checked there. A port that validated the seed and then built the statement inline would sign this one.",
+      "call": "sign",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "deviceId": "",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expectError": "a device_id must not be empty"
+    },
+    {
+      "id": "verify/round-trip",
+      "kind": "device_link",
+      "why": "The ordinary case, and the only one that proves the others are about something: sign/ada-approves-the-laptop's signature, under the public half of the seed that made it. A verifier that refused everything would pass every other verify case in this table.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "verify/second-round-trip",
+      "kind": "device_link",
+      "why": "sign/ada-approves-bo-phone's signature, checked the same way. Two round trips and not one, because a verifier that compared against a single hard-coded statement would pass the first.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-bo-phone",
+      "signingKeyHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "signatureHex": "716c7c978459c237f16290e744c806ac0aafe8984dfb572a3da502baf36c7f7faa9e7315fb90f6d02475521b19aab73f1049c651a6ac02926640cbde55f2fd03",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "verify/one-flipped-signature-bit",
+      "kind": "device_link",
+      "why": "The round-trip signature with the low bit of its first byte flipped. The cheapest possible forgery, and the one a verifier that had stopped calling Ed25519 at all would accept.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "21be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/a-different-device-id",
+      "kind": "device_link",
+      "why": "A real signature over the laptop, presented as an approval of Ada's phone. This is the replay the device id is IN the statement to stop: without it, one approval would vouch for every row that ever held this key.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-phone",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/a-different-signing-key",
+      "kind": "device_link",
+      "why": "The other half of the same idea: the right device id, the wrong key. This is the swap the whole feature is about, and it is the one the cryptography CAN catch - the one it cannot is the server swapping the key before the phone ever signed, which is what the link code is for.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/the-wrong-approver",
+      "kind": "device_link",
+      "why": "A genuine signature, a genuine statement, and the public key of a device that did not sign it (the public half of 4444..44). Somebody else's approval is not yours.",
+      "call": "verify",
+      "approverKeyHex": "d759793bbc13a2819a827c76adb6fba8a49aee007f49f2d0992d99b825ad2c48",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/signature-one-byte-short",
+      "kind": "device_link",
+      "why": "63 bytes: the round-trip signature with its last byte cut off. FALSE and not an error, and that is the decision this row exists to pin - a caller that could tell a truncated signature from a wrong one would be holding an oracle, and every call site would then have to decide for itself which failures are safe to read as no.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/signature-one-byte-long",
+      "kind": "device_link",
+      "why": "65 bytes: the same signature with a trailing zero. The other side of the boundary, and the shape a verifier that read the first 64 bytes and ignored the rest would accept.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa0500",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/approver-key-one-byte-short",
+      "kind": "device_link",
+      "why": "31 bytes of approver key. False, on the same terms as the truncated signature: a malformed key is a question about the shape of a secret nobody offered, and there is exactly one safe answer to it.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c97787",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/signing-key-one-byte-short",
+      "kind": "device_link",
+      "why": "A signing key that statement/ and sign/ both REFUSE arrives here as false instead. The asymmetry is the point: building a statement over nonsense is a caller mistake, and being asked whether nonsense was approved has an answer.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "22222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verify/empty-device-id",
+      "kind": "device_link",
+      "why": "The same asymmetry for the id. Refused when signing, answered when verifying.",
+      "call": "verify",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "commitment/the-approvers-nonce",
+      "kind": "device_link",
+      "why": "Step one: the approver publishes SHA-256 of its nonce under its own domain and nothing else. The nonce stays on the approver until the new device has published its own; this row pins the bytes so four clients commit to the same thing.",
+      "call": "commitment",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a"
+      }
+    },
+    {
+      "id": "commitment/nonce-one-byte-short",
+      "kind": "device_link",
+      "why": "31 bytes. Refused rather than hashed: every nonce in this exchange is exactly 32 bytes from the platform's CSPRNG, and a short one is a caller bug, not a weaker commitment to accept.",
+      "call": "commitment",
+      "approverNonceHex": "66666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "a approver_nonce must be exactly 32 bytes, got 31"
+    },
+    {
+      "id": "number/ordinary",
+      "kind": "device_link",
+      "why": "The ordinary number: the new device's key (aaaa..), the approver's key (bbbb..), the approver's commitment, the new device's nonce (5555..) and the approver's revealed nonce (6666..). Two digits, which is what a person can read off one screen and find among three on another.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "49"
+      }
+    },
+    {
+      "id": "number/the-keys-swapped",
+      "kind": "device_link",
+      "why": "THE SAME TWO KEYS IN THE OTHER ROLES. The number is not symmetric: the new device's key is always first, because each side knows which role it plays. A port that sorted the keys would pass the row above and fail this one.",
+      "call": "number",
+      "newDeviceKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "approverKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "63"
+      }
+    },
+    {
+      "id": "number/a-different-device-nonce",
+      "kind": "device_link",
+      "why": "Only the new device's nonce changed. It is what the approver cannot know when it commits, which is the half of the guarantee that stops a server choosing the approver's number.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5757575757575757575757575757575757575757575757575757575757575757",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "20"
+      }
+    },
+    {
+      "id": "number/a-different-approver-nonce",
+      "kind": "device_link",
+      "why": "Only the approver's nonce (and so its commitment) changed. It is what the new device cannot know when it publishes its nonce, which is the half that stops a server choosing the new device's number.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "23d40e1730776ffbc4689d587423b9876bd8f7fca03badbaed1b58f6684c30b2",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6767676767676767676767676767676767676767676767676767676767676767",
+      "expect": {
+        "number": "52"
+      }
+    },
+    {
+      "id": "number/a-real-derived-public-key",
+      "kind": "device_link",
+      "why": "Ada's phone's actual public key as the approver and the laptop's as the new device, so the table is not made only of keys whose bytes are all equal.",
+      "call": "number",
+      "newDeviceKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "06"
+      }
+    },
+    {
+      "id": "number/leading-zero-is-kept",
+      "kind": "device_link",
+      "why": "A device nonce chosen for exactly one property: its number starts with a zero. The padding is load-bearing - '07' and '7' are the same number to the hash and two different things to a person looking for it among three.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "1313131313131313131313131313131313131313131313131313131313131313",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "04"
+      }
+    },
+    {
+      "id": "number/nonce-does-not-open-the-commitment",
+      "kind": "device_link",
+      "why": "REFUSED, and this is the row the whole exchange rests on. The approver's nonce must open the commitment the new device saw BEFORE it drew its own nonce; a number over a nonce that was never committed is a number a server could have picked after seeing the other side.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "23d40e1730776ffbc4689d587423b9876bd8f7fca03badbaed1b58f6684c30b2",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "does not open its commitment"
+    },
+    {
+      "id": "number/identical-keys",
+      "kind": "device_link",
+      "why": "REFUSED. A number over one key in both roles is a perfectly good hash, and it would render as a MATCH on the screen asking whether these are two different machines.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "a device cannot be compared with itself"
+    },
+    {
+      "id": "number/new-device-key-one-byte-short",
+      "kind": "device_link",
+      "why": "31 bytes, refused rather than hashed, and the refusal names the argument.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "a new_device_key must be exactly 32 bytes, got 31"
+    },
+    {
+      "id": "number/device-nonce-one-byte-long",
+      "kind": "device_link",
+      "why": "33 bytes on the other side's nonce, and it names device_nonce - a port that checked one argument twice would pass the row above and fail this one.",
+      "call": "number",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "555555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "a device_nonce must be exactly 32 bytes, got 33"
+    },
+    {
+      "id": "approverNumber/ordinary",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/ordinary, under the domain peachy-device-link-approver-v1. An independent draw from the first number.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "13"
+      }
+    },
+    {
+      "id": "approverNumber/the-keys-swapped",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/the-keys-swapped, under the domain peachy-device-link-approver-v1. An independent draw from the first number.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "approverKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "71"
+      }
+    },
+    {
+      "id": "approverNumber/a-different-device-nonce",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/a-different-device-nonce, under the domain peachy-device-link-approver-v1. An independent draw from the first number.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5757575757575757575757575757575757575757575757575757575757575757",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "13"
+      }
+    },
+    {
+      "id": "approverNumber/a-different-approver-nonce",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/a-different-approver-nonce, under the domain peachy-device-link-approver-v1. An independent draw from the first number.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "23d40e1730776ffbc4689d587423b9876bd8f7fca03badbaed1b58f6684c30b2",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6767676767676767676767676767676767676767676767676767676767676767",
+      "expect": {
+        "number": "47"
+      }
+    },
+    {
+      "id": "approverNumber/a-real-derived-public-key",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/a-real-derived-public-key, under the domain peachy-device-link-approver-v1. An independent draw from the first number.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "09"
+      }
+    },
+    {
+      "id": "approverNumber/leading-zero-is-kept",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/leading-zero-is-kept, under the domain peachy-device-link-approver-v1. An independent draw from the first number.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "1313131313131313131313131313131313131313131313131313131313131313",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "number": "67"
+      }
+    },
+    {
+      "id": "approverNumber/nonce-does-not-open-the-commitment",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/nonce-does-not-open-the-commitment, under the domain peachy-device-link-approver-v1. It refuses what that row refuses.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "23d40e1730776ffbc4689d587423b9876bd8f7fca03badbaed1b58f6684c30b2",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "does not open its commitment"
+    },
+    {
+      "id": "approverNumber/identical-keys",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/identical-keys, under the domain peachy-device-link-approver-v1. It refuses what that row refuses.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "a device cannot be compared with itself"
+    },
+    {
+      "id": "approverNumber/new-device-key-one-byte-short",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/new-device-key-one-byte-short, under the domain peachy-device-link-approver-v1. It refuses what that row refuses.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "a new_device_key must be exactly 32 bytes, got 31"
+    },
+    {
+      "id": "approverNumber/device-nonce-one-byte-long",
+      "kind": "device_link",
+      "why": "The approver's number, the one the person picks on the new device: the same five inputs as number/device-nonce-one-byte-long, under the domain peachy-device-link-approver-v1. It refuses what that row refuses.",
+      "call": "approverNumber",
+      "newDeviceKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "555555555555555555555555555555555555555555555555555555555555555555",
+      "approverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expectError": "a device_nonce must be exactly 32 bytes, got 33"
+    },
+    {
+      "id": "qr/the-new-laptop",
+      "kind": "device_link",
+      "why": "What the new device's QR code carries: the prefix, its device row id, a slash, and its whole 32-byte key in lower-case hex. The whole key and not a fingerprint, because a fingerprint is something a server could grind and the key is not. The link secret rides after the key, in lower-case hex: the new device drew it for this pairing and keeps it, and it reaches the approver only through the camera.",
+      "call": "qr",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "qr": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
+      },
+      "linkSecretHex": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
+    },
+    {
+      "id": "qr/a-slash-in-the-device-id",
+      "kind": "device_link",
+      "why": "Refused: the slash is the separator, and an id containing one would make the text ambiguous.",
+      "call": "qr",
+      "deviceId": "a/b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expectError": "device_id",
+      "linkSecretHex": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
+    },
+    {
+      "id": "qr/signing-key-one-byte-short",
+      "kind": "device_link",
+      "why": "31 bytes, refused rather than encoded.",
+      "call": "qr",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "22222222222222222222222222222222222222222222222222222222222222",
+      "expectError": "a signing_key must be exactly 32 bytes, got 31",
+      "linkSecretHex": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
+    },
+    {
+      "id": "qr/link-secret-one-byte-short",
+      "kind": "device_link",
+      "why": "The link secret is 32 bytes like the key. A shorter one is a caller bug, never a shorter code.",
+      "call": "qr",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "linkSecretHex": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "expectError": "a link_secret must be exactly 32 bytes, got 31"
+    },
+    {
+      "id": "qrMatches/the-same-device",
+      "kind": "device_link",
+      "why": "The approver scanned the waiting device's own code, and the row it was handed carries the same id and key: approve.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": true,
+        "linkSecretHex": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
+      }
+    },
+    {
+      "id": "qrMatches/whitespace-around-it",
+      "kind": "device_link",
+      "why": "A scanner's trailing newline is not a different code.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e\n",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": true,
+        "linkSecretHex": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
+      }
+    },
+    {
+      "id": "qrMatches/the-server-swapped-the-key",
+      "kind": "device_link",
+      "why": "THE ROW THIS EXISTS FOR. The id matches and the key does not: the server handed the approver a row carrying a key of its own. Never approve.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/a-different-device",
+      "kind": "device_link",
+      "why": "Another waiting device's code: not this one.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "deviceId": "0a0b0c0d-0000-4000-8000-000000000000",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/upper-case-hex",
+      "kind": "device_link",
+      "why": "Only the exact text matches; a re-encoded code is not one Peachy drew.",
+      "call": "qrMatches",
+      "scanned": "PEACHY-LINK:6F1C2A9E-3B4D-4E5F-8A7B-0C1D2E3F4A5B/2222222222222222222222222222222222222222222222222222222222222222/5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/some-other-qr-code",
+      "kind": "device_link",
+      "why": "A QR code from anywhere else is false, never an error.",
+      "call": "qrMatches",
+      "scanned": "https://example.com/",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/a-short-key-on-the-row",
+      "kind": "device_link",
+      "why": "A waiting row whose key is not 32 bytes matches nothing.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "22222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/a-code-without-a-secret",
+      "kind": "device_link",
+      "why": "A code that carries the key and no link secret is not a code this build draws. Matching it would let an approver seal a box the new device has no secret for.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/a-short-secret",
+      "kind": "device_link",
+      "why": "A secret of 31 bytes is not a secret this build draws.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/upper-case-secret",
+      "kind": "device_link",
+      "why": "The secret is lower-case hex, as the code is drawn. Anything else is some other text.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/something-after-the-secret",
+      "kind": "device_link",
+      "why": "Nothing may follow the secret.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e/x",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "qrMatches/another-secret",
+      "kind": "device_link",
+      "why": "Any well-formed secret matches; the approver seals with the one it read.",
+      "call": "qrMatches",
+      "scanned": "peachy-link:6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b/2222222222222222222222222222222222222222222222222222222222222222/0101010101010101010101010101010101010101010101010101010101010101",
+      "deviceId": "6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "expect": {
+        "valid": true,
+        "linkSecretHex": "0101010101010101010101010101010101010101010101010101010101010101"
+      }
+    },
+    {
+      "id": "accountIdentity/adas-account",
+      "kind": "device_link",
+      "why": "Ada's account identity key, derived from her 32-byte account key: seed = HKDF-SHA256(account key, info 'peachy account identity v1', empty salt). The key every peer pins for Ada. Every device that holds the account key derives the same one.",
+      "call": "accountIdentity",
+      "accountSecretHex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "expect": {
+        "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07"
+      }
+    },
+    {
+      "id": "accountIdentity/a-short-account-key",
+      "kind": "device_link",
+      "why": "31 bytes is not an account key.",
+      "call": "accountIdentity",
+      "accountSecretHex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "expectError": "an account_key must be exactly 32 bytes"
+    },
+    {
+      "id": "signAccountDevice/the-laptop",
+      "kind": "device_link",
+      "why": "Ada's account vouching for her laptop: Ed25519 by the derived identity key over 'peachy-account-device-v1' || 0x00 || device_key. Deterministic, so the bytes are pinned.",
+      "call": "signAccountDevice",
+      "accountSecretHex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "expect": {
+        "signatureHex": "3e252e25f902f0874a7ac21fdfbb27e99af74de5f92c81bc2be64dfa9de3e01b6c933a6a4832b002c1f86a5f0141079da8460afcea9ea7efd780127c067f8b0a"
+      }
+    },
+    {
+      "id": "verifyAccountDevice/the-laptop",
+      "kind": "device_link",
+      "why": "The signature above, checked against Ada's identity key.",
+      "call": "verifyAccountDevice",
+      "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "signatureHex": "3e252e25f902f0874a7ac21fdfbb27e99af74de5f92c81bc2be64dfa9de3e01b6c933a6a4832b002c1f86a5f0141079da8460afcea9ea7efd780127c067f8b0a",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "verifyAccountDevice/another-accounts-key",
+      "kind": "device_link",
+      "why": "The same signature checked against a different account's identity key. False: an account signs for its own devices only.",
+      "call": "verifyAccountDevice",
+      "accountKeyHex": "1192a7251f106a347c5f41caefa6f14fdefd211de2f04c10aa426b79cc94a75a",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "signatureHex": "3e252e25f902f0874a7ac21fdfbb27e99af74de5f92c81bc2be64dfa9de3e01b6c933a6a4832b002c1f86a5f0141079da8460afcea9ea7efd780127c067f8b0a",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyAccountDevice/another-device",
+      "kind": "device_link",
+      "why": "Ada's signature for the laptop, offered for a different device key. False.",
+      "call": "verifyAccountDevice",
+      "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07",
+      "signingKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+      "signatureHex": "3e252e25f902f0874a7ac21fdfbb27e99af74de5f92c81bc2be64dfa9de3e01b6c933a6a4832b002c1f86a5f0141079da8460afcea9ea7efd780127c067f8b0a",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyAccountDevice/a-short-signature",
+      "kind": "device_link",
+      "why": "63 bytes. False, not an error: every way a certificate fails is the same answer.",
+      "call": "verifyAccountDevice",
+      "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "signatureHex": "3e252e25f902f0874a7ac21fdfbb27e99af74de5f92c81bc2be64dfa9de3e01b6c933a6a4832b002c1f86a5f0141079da8460afcea9ea7efd780127c067f8b",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "signDeviceRevocation/the-laptop",
+      "kind": "device_link",
+      "why": "Ada's account revoking her laptop: Ed25519 by the derived identity key over 'peachy-device-revocation-v1' || 0x00 || device_key. What RevokeDevice carries, and what a peer checks before it removes the laptop's leaf on more than the server's word. Deterministic, so the bytes are pinned.",
+      "call": "signDeviceRevocation",
+      "accountSecretHex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "expect": {
+        "signatureHex": "338485c041c86859f0e8215848df2c4153395bb84e4de23a2f9ad051e153ff3fb817ecc2446775a5fac7f9af7a6fae04912fdedfca91c4cf91dbe6b786fd440a"
+      }
+    },
+    {
+      "id": "signDeviceRevocation/a-short-device-key",
+      "kind": "device_link",
+      "why": "31 bytes is not a device key.",
+      "call": "signDeviceRevocation",
+      "accountSecretHex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c97787",
+      "expectError": "a device_key must be exactly 32 bytes"
+    },
+    {
+      "id": "verifyDeviceRevocation/the-laptop",
+      "kind": "device_link",
+      "why": "The revocation above, checked against Ada's identity key.",
+      "call": "verifyDeviceRevocation",
+      "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "signatureHex": "338485c041c86859f0e8215848df2c4153395bb84e4de23a2f9ad051e153ff3fb817ecc2446775a5fac7f9af7a6fae04912fdedfca91c4cf91dbe6b786fd440a",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "verifyDeviceRevocation/another-accounts-key",
+      "kind": "device_link",
+      "why": "The same revocation checked against a different account's identity key. False: an account revokes its own devices only, and the server holds no account's key.",
+      "call": "verifyDeviceRevocation",
+      "accountKeyHex": "1192a7251f106a347c5f41caefa6f14fdefd211de2f04c10aa426b79cc94a75a",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "signatureHex": "338485c041c86859f0e8215848df2c4153395bb84e4de23a2f9ad051e153ff3fb817ecc2446775a5fac7f9af7a6fae04912fdedfca91c4cf91dbe6b786fd440a",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyDeviceRevocation/a-certificate-is-not-a-revocation",
+      "kind": "device_link",
+      "why": "The account's certificate for the laptop, offered as its revocation. False: the domains differ, so the signature that let a device in can never be replayed to take it out.",
+      "call": "verifyDeviceRevocation",
+      "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "signatureHex": "3e252e25f902f0874a7ac21fdfbb27e99af74de5f92c81bc2be64dfa9de3e01b6c933a6a4832b002c1f86a5f0141079da8460afcea9ea7efd780127c067f8b0a",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "keyPackageIdentity/the-new-laptop",
+      "kind": "device_link",
+      "why": "The other half of an approval, and the reason it is checkable at all. An approval says 'this device id with this signing key'; this is where those two values come from. They are read out of the key package's OWN bytes, by a client that trusts a set of issuer keys and believes a particular time - never taken from the directory response that carried the package. The issuer seed is credentials.json's 07x32 stand-in for the Peachy server, so the two tables cannot drift on what a pdc1 is; the laptop's device seed is 33x32 and its public half is the deviceKeyHex below.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+        "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07"
+      }
+    },
+    {
+      "id": "keyPackageIdentity/the-directory-told-the-truth",
+      "kind": "device_link",
+      "why": "The same package, with the device id the directory claimed for it. matchesClaim is true, which is the ordinary case and the one worth pinning beside the next row: a check that could only ever answer false would be no check.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "claimedDeviceId": "device-ada-laptop",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+        "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07",
+        "matchesClaim": true
+      }
+    },
+    {
+      "id": "keyPackageIdentity/the-directory-lied",
+      "kind": "device_link",
+      "why": "THE ROW THIS DOOR EXISTS FOR. The very same package, served with somebody else's device id attached. A client that took the id from the server would verify Ada's approval of her phone and then add her laptop's leaf - the approval checks out, every signature verifies, and the leaf that lands is one nobody approved. matchesClaim is false, and it is false because the package was read and the server was not.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "claimedDeviceId": "device-ada-phone",
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+        "accountKeyHex": "85dbe34c0ff4509f205ea284a6666d919d2e773ea94131bb33191330a49e5c07",
+        "matchesClaim": false
+      }
+    },
+    {
+      "id": "keyPackageIdentity/an-expired-credential",
+      "kind": "device_link",
+      "why": "A VERDICT and not an error, exactly as on a roster. The credential expired 800 seconds before the reader's clock; producedAtUnix puts the producing device back at issue time, because a device cannot build a key package against a credential its own clock says is already dead - which is why two clocks are needed to write this row at all. A caller gets a name and a number and can say 'that device's credential expired' rather than 'no'.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "producedAtUnix": 1789513200,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1789516000,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "rejection": "expired",
+        "rejectionCode": 4
+      }
+    },
+    {
+      "id": "keyPackageIdentity/an-unknown-issuer",
+      "kind": "device_link",
+      "why": "The package is perfectly well formed and its credential is perfectly well signed - by 99x32, which this reader has never heard of. This is the shape a forged key package takes when whoever made it could not reach the server's signing key, and the answer has to be a refusal that names the reason rather than a leaf quietly admitted.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "mint": {
+        "signerSeed": "9999999999999999999999999999999999999999999999999999999999999999",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "rejection": "unknown_kid",
+        "rejectionCode": 2
+      }
+    },
+    {
+      "id": "keyPackageIdentity/not-yet-valid",
+      "kind": "device_link",
+      "why": "The other end of the window, a day ahead of the reader and well past any tolerated skew. Worth its own row beside the expired one because the two are one comparison written twice, and a port that got the sign wrong passes one and fails the other.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "producedAtUnix": 1789603200,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789603200,
+        "expiresAt": 1789689600,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expect": {
+        "rejection": "not_yet_valid",
+        "rejectionCode": 5
+      }
+    },
+    {
+      "id": "keyPackageIdentity/garbage-bytes",
+      "kind": "device_link",
+      "why": "REFUSED, not rejected, and the distinction is the whole design. A rejection means 'this is a key package and I will not believe it'; four bytes of nonsense are not a key package at all, and folding the two together would let a caller report 'that device's credential is bad' about something that was never a credential.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "keyPackageHex": "deadbeef",
+      "expectError": "codec"
+    },
+    {
+      "id": "keyPackageIdentity/no-bytes-at-all",
+      "kind": "device_link",
+      "why": "An empty body is the shape a truncated or dropped directory response takes, and it must reach the caller as a failure rather than as an empty identity that compares equal to nothing and is therefore quietly 'not a match'.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "keyPackageHex": "",
+      "expectError": "codec"
+    },
+    {
+      "id": "keyPackageIdentity/a-case-with-no-package",
+      "kind": "device_link",
+      "why": "A case-author mistake, refused by name. A keyPackageIdentity case says where its bytes come from - a mint or a literal - and one that says neither would otherwise read a verdict off nothing.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "expectError": "needs a `mint` or a `keyPackageHex`"
+    },
+    {
+      "id": "keyPackageIdentity/a-reader-that-trusts-nobody",
+      "kind": "device_link",
+      "why": "Not a verdict either. A client validates its own credential before it will open at all, so a reader trusting no issuer cannot exist to read anything - and a row that returned 'unknown_kid' here would be describing a client that never existed rather than a package that was refused.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [],
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expectError": "at least one `trust` seed"
+    },
+    {
+      "id": "keyPackageIdentity/a-case-with-no-clock",
+      "kind": "device_link",
+      "why": "The clock is an input and never the machine's: every expiry verdict in this table is an answer about a particular moment, and a case that left it out would pass today and start failing on a date nobody chose.",
+      "call": "keyPackageIdentity",
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800,
+        "accountKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "expectError": "needs a `nowUnix`"
+    },
+    {
+      "id": "keyPackageIdentity/a-device-its-account-never-let-in",
+      "kind": "device_link",
+      "why": "A key package from a device whose credential carries no account certificate - the device a server could add on its own. Every reader refuses it as not_approved and adds nobody. The fixture forges the package: an honest client refuses to make one.",
+      "call": "keyPackageIdentity",
+      "nowUnix": 1789516800,
+      "trust": [
+        "0707070707070707070707070707070707070707070707070707070707070707"
+      ],
+      "mint": {
+        "signerSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+        "actorId": "actor-ada",
+        "deviceId": "device-ada-laptop",
+        "deviceSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+        "issuedAt": 1789513200,
+        "expiresAt": 1792108800
+      },
+      "claimedDeviceId": "device-ada-laptop",
+      "expect": {
+        "matchesClaim": false,
+        "rejection": "not_approved",
+        "rejectionCode": 12
+      }
+    },
+    {
+      "id": "waiterStep/nothing-bound-answers",
+      "kind": "device_link",
+      "why": "A PAIRING THAT HAS ANSWERED NOTHING answers the first commitment it sees, and that answer binds it: to this approver, the key the device list gives for it (bbbb..) and this commitment (the one 6666.. opens).",
+      "call": "waiterStep",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expect": {
+        "waiterStep": "answer"
+      }
+    },
+    {
+      "id": "waiterStep/empty-binding-fields-are-nothing-bound",
+      "kind": "device_link",
+      "why": "The same pairing with the three binding fields present but empty, which is how a client with nothing bound crosses an ABI. Empty means none, and only all three empty does.",
+      "call": "waiterStep",
+      "boundApproverDeviceId": "",
+      "boundApproverKeyHex": "",
+      "boundCommitmentHex": "",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expect": {
+        "waiterStep": "answer"
+      }
+    },
+    {
+      "id": "waiterStep/the-bound-exchange-continues",
+      "kind": "device_link",
+      "why": "The exchange this pairing answered, read again: the same approver, key and commitment. The device sends the SAME nonce again if the row lost it, and derives the number, over the bound key, once the approver reveals.",
+      "call": "waiterStep",
+      "boundApproverDeviceId": "approver-ada-phone",
+      "boundApproverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "boundCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expect": {
+        "waiterStep": "continue"
+      }
+    },
+    {
+      "id": "waiterStep/a-restart-after-a-shown-number-is-interrupted",
+      "kind": "device_link",
+      "why": "THE ROW THAT HOLDS THE ODDS. The approver this pairing answered now shows a different commitment (the one 7777.. opens): the exchange was started over. A server knows the number the waiting device would show before it reveals anything, so a device that answered every fresh commitment would let it restart, silently, until the numbers matched. One nonce per pairing: the pairing is over, the device shows no number, says it was interrupted, and answers nothing until the person starts again by hand.",
+      "call": "waiterStep",
+      "boundApproverDeviceId": "approver-ada-phone",
+      "boundApproverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "boundCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "31e63360ffb1719204d6f7df79344478109dd31ef56eeac71bc53f4ffe514cf4",
+      "expect": {
+        "waiterStep": "interrupted"
+      }
+    },
+    {
+      "id": "waiterStep/a-new-key-for-the-bound-approver-is-interrupted",
+      "kind": "device_link",
+      "why": "The same approver and commitment under a different key (cccc..). The approver's key is an input to the number that the server supplies; read again after the reveal it would be the one input the server could still choose with all the others known. Bound at the answer, a change ends the pairing.",
+      "call": "waiterStep",
+      "boundApproverDeviceId": "approver-ada-phone",
+      "boundApproverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "boundCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expect": {
+        "waiterStep": "interrupted"
+      }
+    },
+    {
+      "id": "waiterStep/another-approver-is-ignored",
+      "kind": "device_link",
+      "why": "Another approver's exchange while this pairing is bound: never answered, and it ends nothing. A port that answered it would release a second nonce in one pairing, which is the restart by another name.",
+      "call": "waiterStep",
+      "boundApproverDeviceId": "approver-ada-phone",
+      "boundApproverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "boundCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "approverDeviceId": "approver-ada-tablet",
+      "approverKeyHex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "commitmentHex": "31e63360ffb1719204d6f7df79344478109dd31ef56eeac71bc53f4ffe514cf4",
+      "expect": {
+        "waiterStep": "ignore"
+      }
+    },
+    {
+      "id": "waiterStep/half-a-binding-is-refused",
+      "kind": "device_link",
+      "why": "A bound approver with no key or commitment beside it. Half a binding must never read as no binding, which would answer again.",
+      "call": "waiterStep",
+      "boundApproverDeviceId": "approver-ada-phone",
+      "boundApproverKeyHex": "",
+      "boundCommitmentHex": "",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expectError": "bound_approver_key"
+    },
+    {
+      "id": "waiterStep/a-binding-without-its-approver-is-refused",
+      "kind": "device_link",
+      "why": "A bound key and commitment with no approver id: the same mistake from the other side.",
+      "call": "waiterStep",
+      "boundApproverDeviceId": "",
+      "boundApproverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "boundCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expectError": "all three"
+    },
+    {
+      "id": "waiterStep/a-short-commitment-is-refused",
+      "kind": "device_link",
+      "why": "An offered commitment of 31 bytes: a refusal, never a verdict. The caller skips the exchange, binding and answering nothing.",
+      "call": "waiterStep",
+      "approverDeviceId": "approver-ada-phone",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b0",
+      "expectError": "approver_commitment"
+    },
+    {
+      "id": "waiterStep/an-exchange-with-no-approver-is-refused",
+      "kind": "device_link",
+      "why": "An offered exchange with an empty approver id.",
+      "call": "waiterStep",
+      "approverDeviceId": "",
+      "approverKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expectError": "approver_id"
+    },
+    {
+      "id": "signCommitment/ada-commits-for-the-laptop",
+      "kind": "device_link",
+      "why": "The approver signs its commitment together with the waiting device's id and key, under the domain peachy-device-link-commit-v2. Ed25519 is deterministic, so the statement and the signature are golden values. The waiting device answers only an exchange whose signature holds, so a server cannot stand in as this approver toward it.",
+      "call": "signCommitment",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expect": {
+        "statementHex": "7065616368792d6465766963652d6c696e6b2d636f6d6d69742d7632006465766963652d6164612d6c6170746f70002222222222222222222222222222222222222222222222222222222222222222968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+        "signatureHex": "47d5ccdd020ff74d2a82d28a8b51c43014612e52c81271836fb8aae96f2018edc26b3712d852cb83ea98600eefeaf8e9c4050c2840ae257dc22f00249dcdc906"
+      }
+    },
+    {
+      "id": "signCommitment/a-short-commitment-is-refused",
+      "kind": "device_link",
+      "why": "31 bytes of commitment: a caller bug, refused, and the refusal names it.",
+      "call": "signCommitment",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b0",
+      "expectError": "approver_commitment"
+    },
+    {
+      "id": "signCommitment/an-empty-device-id-is-refused",
+      "kind": "device_link",
+      "why": "No waiting device named: refused when signing.",
+      "call": "signCommitment",
+      "seedHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "deviceId": "",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expectError": "pending_device_id"
+    },
+    {
+      "id": "verifyCommitment/round-trip",
+      "kind": "device_link",
+      "why": "The ordinary case: signCommitment/ada-commits-for-the-laptop's signature under the public half of 1111..11, over the waiting device's own id and key. The waiting device answers this exchange.",
+      "call": "verifyCommitment",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "signatureHex": "47d5ccdd020ff74d2a82d28a8b51c43014612e52c81271836fb8aae96f2018edc26b3712d852cb83ea98600eefeaf8e9c4050c2840ae257dc22f00249dcdc906",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "verifyCommitment/signed-for-another-key",
+      "kind": "device_link",
+      "why": "THE SUBSTITUTION. The approver signed the commitment for the key it was shown; a waiting device holding a different key (3333..) finds the signature does not hold for its own key, and answers nothing. A server that swapped the key toward the approver cannot reuse the approver's commitment toward the real device.",
+      "call": "verifyCommitment",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "signatureHex": "47d5ccdd020ff74d2a82d28a8b51c43014612e52c81271836fb8aae96f2018edc26b3712d852cb83ea98600eefeaf8e9c4050c2840ae257dc22f00249dcdc906",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyCommitment/signed-for-another-device",
+      "kind": "device_link",
+      "why": "The same signature presented to a different waiting row: false.",
+      "call": "verifyCommitment",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-tablet",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "signatureHex": "47d5ccdd020ff74d2a82d28a8b51c43014612e52c81271836fb8aae96f2018edc26b3712d852cb83ea98600eefeaf8e9c4050c2840ae257dc22f00249dcdc906",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyCommitment/another-commitment",
+      "kind": "device_link",
+      "why": "A commitment the approver did not sign (the one 7777.. opens), under its real signature: false. A server cannot restart the exchange in the approver's name.",
+      "call": "verifyCommitment",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "31e63360ffb1719204d6f7df79344478109dd31ef56eeac71bc53f4ffe514cf4",
+      "signatureHex": "47d5ccdd020ff74d2a82d28a8b51c43014612e52c81271836fb8aae96f2018edc26b3712d852cb83ea98600eefeaf8e9c4050c2840ae257dc22f00249dcdc906",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyCommitment/the-wrong-approver",
+      "kind": "device_link",
+      "why": "A genuine signature under the key of a device that did not make it (the public half of 4444..44): false. The key the waiting device checks against comes from its own device list, from an approved, unrevoked, certified row.",
+      "call": "verifyCommitment",
+      "approverKeyHex": "d759793bbc13a2819a827c76adb6fba8a49aee007f49f2d0992d99b825ad2c48",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "signatureHex": "47d5ccdd020ff74d2a82d28a8b51c43014612e52c81271836fb8aae96f2018edc26b3712d852cb83ea98600eefeaf8e9c4050c2840ae257dc22f00249dcdc906",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyCommitment/an-approval-is-not-a-commitment",
+      "kind": "device_link",
+      "why": "Ada's approval signature over the laptop (sign/ada-approves-the-laptop), presented as a commitment signature: false. The two statements have different domains, so one can never read as the other.",
+      "call": "verifyCommitment",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "signatureHex": "20be4cc036ac5c71024a923f58befc2fb17ed4f4545bee2f9412f0c1b5b17956bdc642010dbad8e6e06e5ddb3ae9c5bdcd7f227267d9d43fad6c7a457d72fa05",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyCommitment/signature-one-byte-short",
+      "kind": "device_link",
+      "why": "63 bytes: false, never an error.",
+      "call": "verifyCommitment",
+      "approverKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "signingKeyHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "signatureHex": "47d5ccdd020ff74d2a82d28a8b51c43014612e52c81271836fb8aae96f2018edc26b3712d852cb83ea98600eefeaf8e9c4050c2840ae257dc22f00249dcdc9",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "approverStep/nothing-listed-commits",
+      "kind": "device_link",
+      "why": "A prompt just opened for the waiting row (key aaaa..) and nothing of ours is on it: post the commitment (the one 6666.. opens) with its signature.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "approverStep": "commit"
+      }
+    },
+    {
+      "id": "approverStep/a-foreign-commitment-before-anything-is-fixed-posts-ours-again",
+      "kind": "device_link",
+      "why": "Another commitment under our approver id (the one 7777.. opens; a stale read, another window) while nothing is fixed: post OUR commitment again, never a fresh one. One commitment per prompt, and nothing has been revealed.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "listedCommitmentHex": "31e63360ffb1719204d6f7df79344478109dd31ef56eeac71bc53f4ffe514cf4",
+      "expect": {
+        "approverStep": "commit"
+      }
+    },
+    {
+      "id": "approverStep/our-commitment-unanswered-waits",
+      "kind": "device_link",
+      "why": "Our commitment, no device nonce yet: wait.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expect": {
+        "approverStep": "wait"
+      }
+    },
+    {
+      "id": "approverStep/the-first-device-nonce-is-fixed-then-revealed",
+      "kind": "device_link",
+      "why": "The first device nonce (5555..) under our commitment. The caller FIXES it, then posts the reveal. Everything after is judged against it.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "expect": {
+        "approverStep": "reveal"
+      }
+    },
+    {
+      "id": "approverStep/a-failed-reveal-is-retried-over-identical-inputs",
+      "kind": "device_link",
+      "why": "The reveal post failed; the row still lists the same key, commitment and device nonce we fixed: post the same reveal again.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "expect": {
+        "approverStep": "reveal"
+      }
+    },
+    {
+      "id": "approverStep/a-failed-reveal-then-another-device-nonce-is-interrupted",
+      "kind": "device_link",
+      "why": "THE ROW THAT HOLDS THE ODDS. The reveal post failed, so the server holds our nonce (6666..) and could search offline for a device nonce that makes both numbers match. The next read lists one (5757..) with our reveal stored. An approver that derived its number over it would show the server's choice. It is not the nonce we fixed: interrupted, no number, approval closed.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5757575757575757575757575757575757575757575757575757575757575757",
+      "listedApproverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "approverStep": "interrupted"
+      }
+    },
+    {
+      "id": "approverStep/another-device-nonce-before-the-reveal-lands-is-interrupted",
+      "kind": "device_link",
+      "why": "The same substitution before our reveal is stored: interrupted, and no second reveal over it.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5757575757575757575757575757575757575757575757575757575757575757",
+      "expect": {
+        "approverStep": "interrupted"
+      }
+    },
+    {
+      "id": "approverStep/our-reveal-over-the-fixed-nonce-shows",
+      "kind": "device_link",
+      "why": "Our reveal is listed over the device nonce we fixed: show the number, derived over the prompt's key and the FIXED nonce.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedApproverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "approverStep": "show"
+      }
+    },
+    {
+      "id": "approverStep/the-waiting-rows-key-changed-is-interrupted",
+      "kind": "device_link",
+      "why": "The waiting row now carries another key (bbbb..) than the one the prompt was opened for and the commitment signature covers: interrupted.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "expect": {
+        "approverStep": "interrupted"
+      }
+    },
+    {
+      "id": "approverStep/the-exchange-vanished-after-the-fix-is-interrupted",
+      "kind": "device_link",
+      "why": "A device nonce was fixed and the reveal sent, and the row now lists no exchange of ours: interrupted, never a fresh commitment.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "expect": {
+        "approverStep": "interrupted"
+      }
+    },
+    {
+      "id": "approverStep/a-restart-after-the-fix-is-interrupted",
+      "kind": "device_link",
+      "why": "A device nonce was fixed, and the row now lists another commitment under our id: interrupted.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "31e63360ffb1719204d6f7df79344478109dd31ef56eeac71bc53f4ffe514cf4",
+      "listedDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "expect": {
+        "approverStep": "interrupted"
+      }
+    },
+    {
+      "id": "approverStep/a-reveal-that-is-not-ours-is-interrupted",
+      "kind": "device_link",
+      "why": "A stored approver nonce that does not open our commitment (7777..): interrupted.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedApproverNonceHex": "7777777777777777777777777777777777777777777777777777777777777777",
+      "expect": {
+        "approverStep": "interrupted"
+      }
+    },
+    {
+      "id": "approverStep/a-reveal-before-anything-was-fixed-is-interrupted",
+      "kind": "device_link",
+      "why": "Our reveal is listed though this prompt never fixed a device nonce: this prompt did not send it. Interrupted.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedDeviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "listedApproverNonceHex": "6666666666666666666666666666666666666666666666666666666666666666",
+      "expect": {
+        "approverStep": "interrupted"
+      }
+    },
+    {
+      "id": "approverStep/a-short-bound-nonce-is-refused",
+      "kind": "device_link",
+      "why": "The caller's own fixed nonce is 31 bytes: a bug in the caller's state, refused rather than read as nothing fixed.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boundDeviceNonceHex": "55555555555555555555555555555555555555555555555555555555555555",
+      "listedCommitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "expectError": "bound_device_nonce"
+    },
+    {
+      "id": "approverStep/a-short-pending-key-is-refused",
+      "kind": "device_link",
+      "why": "The caller's pending key is 31 bytes: refused.",
+      "call": "approverStep",
+      "pendingKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "listedKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expectError": "pending_key"
+    },
+    {
+      "id": "linkKey/from-its-seed",
+      "kind": "device_link",
+      "why": "The waiting device draws a fresh 32-byte seed for each pairing and posts the X-Wing (ML-KEM-768 + X25519) public key it derives: 1216 bytes. The derivation is deterministic, so the key is a golden value. The approver seals the account key to it as well as to the device's X25519 key, so a recording of the pairing does not open once X25519 falls.",
+      "call": "linkKey",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expect": {
+        "linkKeyHex": "13e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d352"
+      }
+    },
+    {
+      "id": "linkKey/another-seed",
+      "kind": "device_link",
+      "why": "Another seed, another key.",
+      "call": "linkKey",
+      "seedHex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+      "expect": {
+        "linkKeyHex": "d4eccab542a5548bac10ccbd137525777059de1396c5476f674037c9649a81d373c1dba6bff6233853b7a98175fa946f7bbb7a6ea9c6f134c9fda202d8a41846a2ab2e93bc70878439a84e2be72db05b15cf57a971d644767718702902282738b9aca50f0b5f72d33049660ffa382f74ba953493bb18630afa98cdd869b6543c122bc58aeb21354820bfbce007d4b388b8a6874100809fc2704e273e6501a2a9ec3839dc6090ac584f125fa412011a05be8a5676b6323ab33cbe9d558918b4229e8853b1016ca045520724078bd277fe98409b873525f3cfd3e92e6a5290af668ef9ab83bfe3cee6f0ae73b9631fa78e4e837da509068fb3cc23e3aba3677e4c52a33697133a6c45849c2d9951694ef4150e5a66288473b5dc6abc479879e19e0cd90e2904ccee2830a903c549e487ba790415a356a23cbd58d505fa540195497a86b8702006263ed48bd2333470b58080d0aba20a0d0fb8adf9f82fe2c45e48d39b9630588eec75eea44bf914cb0f1848774803a00b1a339c31257c2534c11d6fd8a4ac138f714973cf0c8b14369731ec9632b04a5fb64e213b4b16379a7c5b9da38c3ecc0b4d10f00284807bd030b357527b7a957380d08f8c341ec7416701098f20a88087bb91efacc9f3b74845e72857053af7cc39158cb917f8ca454cce469c5e23074f137872f294a767c465eec91b71fb4b40731d27ca1d70db88f47971f444817937132daa46d992513fbc9130c32526116aec7c5a0a66b8ae71066a401657ca58216c6b32b097529b3c84105fab69c027ea84b8168e1636819b796415151d2d02cf180595b3f18adbb84807a45556259562b790fa5c115b3705866578d7b78f2335251ee563e87542e27c5f923cc8f3ca44e8c55c104038d817c20e9b6ab81069b48569ce6c83d478131ac26a378767479262b7c19dee359d62f0b40c61b0e3a2bd5fcc7d0c015f8b78bf98c91b03d361769c9a11437bb5cc269589bf20b9534242a3a581320d344ff95022975abc4345526c4815bab64daec5a3fbea24e513306473174ae98902a36e6bd4794412518308c8c09979577241567a357a8c933fe46cdd49cedec74435592c71cb84b2f6a708cb04960256102bb66fc8157c1205ef011f93a23fdf1a81366c0e53da1cf2a6087eaa71cba40daaf777638965ca764b1544bb46436355e0cf9ae3c52579bf91b95f59a9575635a3064acd254c8e1e922280d739906810ed290465b792e0ca0273f2a67086770885b1a8f1a4109b32cf21b913038eeaba8e94638aee0601518678ec067784916c6adbc823ec4f98a8a6342a9d4d6a4c5db5078153794cca7e6fa87e53db34bf9b4fa634af8beca4585c3af33b501768a260d9b13f76ccf412ab0d6b6134bc5ffee8b46e09c3883c8a170c810934c3bf9565e528487035c5fae8955e5134f624a685a05622071536f0a549bc05148c503a6c809aea843eb02378566ac498332a110b1653badffab626154ab9105b49f26f6c894ef36641ca083ddb913dc5520b18f95629a7300f220e7b8bc30201aea7967c50a14e6dec0638039e4fe43f1ae63612e68961f277d610585fdc5745f9332c78687aa7b1f7741074b590987030782a0e8b678a82ae95bed9efa01adce69398eb1b3e0350e6df68f0f331df591634582ceec7964eb3615c648e2b10392d5c42764503e54c3bf51f6b4420748dc1b9c45280d222"
+      }
+    },
+    {
+      "id": "linkKey/a-short-seed-is-refused",
+      "kind": "device_link",
+      "why": "31 bytes of seed: a caller bug, refused.",
+      "call": "linkKey",
+      "seedHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "expectError": "seed"
+    },
+    {
+      "id": "signLinkKey/the-laptop-posts-its-link-key",
+      "kind": "device_link",
+      "why": "The waiting device (seed 3333..) signs its link key together with its row's id, the approver's commitment and its own nonce, under the domain peachy-device-link-kem-v1: the domain, 0x00, the id in ASCII, 0x00, the 32-byte commitment, the 32-byte nonce, then the 1216-byte link key. Its signing key is the one the two-digit number is derived over, so a link key the approver accepts is the one this device posted.",
+      "call": "signLinkKey",
+      "seedHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "deviceId": "device-ada-laptop",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "linkKeyHex": "13e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d352",
+      "expect": {
+        "statementHex": "7065616368792d6465766963652d6c696e6b2d6b656d2d7631006465766963652d6164612d6c6170746f7000968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a555555555555555555555555555555555555555555555555555555555555555513e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d352",
+        "signatureHex": "d00d153892eff01a02965e8cbab06ca3386e23b641abfaada4f64f713f4ccc995b393c791cab1e49c0f7128f13d6c1ecf28291f752a2164b457326ce4f260a0e"
+      }
+    },
+    {
+      "id": "signLinkKey/a-short-link-key-is-refused",
+      "kind": "device_link",
+      "why": "1215 bytes of link key: refused when signing, and the refusal names it.",
+      "call": "signLinkKey",
+      "seedHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "deviceId": "device-ada-laptop",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "linkKeyHex": "13e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d3",
+      "expectError": "link_key"
+    },
+    {
+      "id": "verifyLinkKey/round-trip",
+      "kind": "device_link",
+      "why": "signLinkKey/the-laptop-posts-its-link-key's signature under the waiting device's key: the approver seals to this link key.",
+      "call": "verifyLinkKey",
+      "signingKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+      "deviceId": "device-ada-laptop",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "linkKeyHex": "13e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d352",
+      "signatureHex": "d00d153892eff01a02965e8cbab06ca3386e23b641abfaada4f64f713f4ccc995b393c791cab1e49c0f7128f13d6c1ecf28291f752a2164b457326ce4f260a0e",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "verifyLinkKey/a-swapped-link-key",
+      "kind": "device_link",
+      "why": "THE SUBSTITUTION. A server swaps in a link key of its own under the device's real signature: false, and the approver falls back to the box it sealed before link keys, never to the server's key.",
+      "call": "verifyLinkKey",
+      "signingKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+      "deviceId": "device-ada-laptop",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "linkKeyHex": "d4eccab542a5548bac10ccbd137525777059de1396c5476f674037c9649a81d373c1dba6bff6233853b7a98175fa946f7bbb7a6ea9c6f134c9fda202d8a41846a2ab2e93bc70878439a84e2be72db05b15cf57a971d644767718702902282738b9aca50f0b5f72d33049660ffa382f74ba953493bb18630afa98cdd869b6543c122bc58aeb21354820bfbce007d4b388b8a6874100809fc2704e273e6501a2a9ec3839dc6090ac584f125fa412011a05be8a5676b6323ab33cbe9d558918b4229e8853b1016ca045520724078bd277fe98409b873525f3cfd3e92e6a5290af668ef9ab83bfe3cee6f0ae73b9631fa78e4e837da509068fb3cc23e3aba3677e4c52a33697133a6c45849c2d9951694ef4150e5a66288473b5dc6abc479879e19e0cd90e2904ccee2830a903c549e487ba790415a356a23cbd58d505fa540195497a86b8702006263ed48bd2333470b58080d0aba20a0d0fb8adf9f82fe2c45e48d39b9630588eec75eea44bf914cb0f1848774803a00b1a339c31257c2534c11d6fd8a4ac138f714973cf0c8b14369731ec9632b04a5fb64e213b4b16379a7c5b9da38c3ecc0b4d10f00284807bd030b357527b7a957380d08f8c341ec7416701098f20a88087bb91efacc9f3b74845e72857053af7cc39158cb917f8ca454cce469c5e23074f137872f294a767c465eec91b71fb4b40731d27ca1d70db88f47971f444817937132daa46d992513fbc9130c32526116aec7c5a0a66b8ae71066a401657ca58216c6b32b097529b3c84105fab69c027ea84b8168e1636819b796415151d2d02cf180595b3f18adbb84807a45556259562b790fa5c115b3705866578d7b78f2335251ee563e87542e27c5f923cc8f3ca44e8c55c104038d817c20e9b6ab81069b48569ce6c83d478131ac26a378767479262b7c19dee359d62f0b40c61b0e3a2bd5fcc7d0c015f8b78bf98c91b03d361769c9a11437bb5cc269589bf20b9534242a3a581320d344ff95022975abc4345526c4815bab64daec5a3fbea24e513306473174ae98902a36e6bd4794412518308c8c09979577241567a357a8c933fe46cdd49cedec74435592c71cb84b2f6a708cb04960256102bb66fc8157c1205ef011f93a23fdf1a81366c0e53da1cf2a6087eaa71cba40daaf777638965ca764b1544bb46436355e0cf9ae3c52579bf91b95f59a9575635a3064acd254c8e1e922280d739906810ed290465b792e0ca0273f2a67086770885b1a8f1a4109b32cf21b913038eeaba8e94638aee0601518678ec067784916c6adbc823ec4f98a8a6342a9d4d6a4c5db5078153794cca7e6fa87e53db34bf9b4fa634af8beca4585c3af33b501768a260d9b13f76ccf412ab0d6b6134bc5ffee8b46e09c3883c8a170c810934c3bf9565e528487035c5fae8955e5134f624a685a05622071536f0a549bc05148c503a6c809aea843eb02378566ac498332a110b1653badffab626154ab9105b49f26f6c894ef36641ca083ddb913dc5520b18f95629a7300f220e7b8bc30201aea7967c50a14e6dec0638039e4fe43f1ae63612e68961f277d610585fdc5745f9332c78687aa7b1f7741074b590987030782a0e8b678a82ae95bed9efa01adce69398eb1b3e0350e6df68f0f331df591634582ceec7964eb3615c648e2b10392d5c42764503e54c3bf51f6b4420748dc1b9c45280d222",
+      "signatureHex": "d00d153892eff01a02965e8cbab06ca3386e23b641abfaada4f64f713f4ccc995b393c791cab1e49c0f7128f13d6c1ecf28291f752a2164b457326ce4f260a0e",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyLinkKey/signed-by-another-device",
+      "kind": "device_link",
+      "why": "The signature checked under a key other than the one the number was derived over (the approver's own): false.",
+      "call": "verifyLinkKey",
+      "signingKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "deviceId": "device-ada-laptop",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "linkKeyHex": "13e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d352",
+      "signatureHex": "d00d153892eff01a02965e8cbab06ca3386e23b641abfaada4f64f713f4ccc995b393c791cab1e49c0f7128f13d6c1ecf28291f752a2164b457326ce4f260a0e",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyLinkKey/another-exchange",
+      "kind": "device_link",
+      "why": "The same link key and signature replayed into a later exchange with another nonce: false. A link key belongs to one pairing.",
+      "call": "verifyLinkKey",
+      "signingKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+      "deviceId": "device-ada-laptop",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5757575757575757575757575757575757575757575757575757575757575757",
+      "linkKeyHex": "13e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d352",
+      "signatureHex": "d00d153892eff01a02965e8cbab06ca3386e23b641abfaada4f64f713f4ccc995b393c791cab1e49c0f7128f13d6c1ecf28291f752a2164b457326ce4f260a0e",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyLinkKey/another-row",
+      "kind": "device_link",
+      "why": "The same signature presented for a different waiting row: false.",
+      "call": "verifyLinkKey",
+      "signingKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+      "deviceId": "device-ada-tablet",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "linkKeyHex": "13e73d2b06b8fd6b91ebdccb95d6cbfa849705a76b9d942ab2f81f6f3071cd3482ccd64307c82066225d67043ea1e7b0ed21b937048acd1b1e8d02bc55f3b7ea2b45d3029471cb228bccc5d2b045c6f967010958dfe0b5c74323f0146119407a3909bed247136491b217269bce48646fd935e0a072b89565f607860a788d275312faba20d7c32fc016b730f991f6702c8fc3c8c2cc09a5bc4303d522fd0a90554ccf6e3299be85101db4ca0daa65843987a828a8421b75d4bb0096354253f57bdcd7af4a2c686e5b3844234b0338c03f9c7e80baa4365a6cac011b6aa28b2ff069f6e29749897c12faac12c40c99da611db54e5b415570fbb7505397cef26f8ef7b23dc18fc4187f43245cb03c2c4e908f08a78396b97aa2a4a8f8e25aef1726d6e1177f2547f4746cff658023db76f56a5bd6c24112c473247080c582a3709accb4a59bb8f16fb0160c074813dc1b9ec2961a5627ba8641c340850cfac4b186b27850868518c4128db0750b8a350aca2200d46ebf367fbfc88ac93290119315fdd210b841a47a5ab99676981630cb82b18e830350459105d23b9eff921a7d188403817818848d0c171745440dda95b54beb6778e4c42c999a013b898f4002fbf4801ef6517698060aa162a80a1e229a9725f439c7a0380d9026d3da5a961606df3460a7cc3f13cc21e4b444072317ea2374b879011918742daa72b8925ab6b1986f01192aa63d2ef35f7c68434b562f07579ca40974687b6092a1318aa05c2601a3c79058ccb7b2492a12f695658ac18ebfb413f021604da6224bd18fd102478dfc0a23292d9613689bbb04daf3563c3a3e81aa0bc9e09d41c17fde17a7bfca55dba4192edcabf0a9b0819950300c5e52a27dc8855b68bb13a497b22e72150fb5285073a05bb96e05708148015dae4b8c62b19c2e4b06d9a28623a12a27569cb988ba300196b2d82ca0332347c5a274a1036a7343ab615183a1b978c4c7188c48c3918859b68572264f523320dff71392115e8bea2ef9733eb3f0a1d7822a1910327f87745f8b6a45cc7fca45722cf985a75768ec147783412dc494cd1aa81353a29611811647b16cd42334d7a0cfc3483c4b3aaee250a4acb36bd57630ef1a8e50ca59d5c9a56dc3938ac4b9404abe4530a751b1a70ec06da1f5bb53ac4a28151b2213ba39db3bb89c113dd767e911155796b847f47d3bec991f365f32629172d3022b1c6f71930316d26ac30ba7b70b67aa267a2abab903175e2feb2f59756e683c657eaa2869e0a6bcb18b58561e47d79068364c93fb1a4907ae21e31f4b29ad9c4184c93a3464e16553ea3d08945589a90d04db447277168a1138225b7e2fb990ff4362d85b10303885a6f712fcc56a19406712a7426277b8deb3a02631cfd6e661842c5c33525bbf425727053940778553846e8816093b6a6cfcdb1eabf1625bd1027b61654f9b8305c50d0da74a5332b1130c109141c29d49452784bc654ac7ea31cffdd2606ac190db56c413c0535b7a74c626c588d7b0c5199a97e8a33944139d239b4ea24013d5575d75a051d3846ce170603649f3c1828659496ce28b4a1956f783ab4718ac2b2b7db6e85ba4c646e50663848951104954d61a7538f86dbfe93c5d9852f864a700108187b391a3303c94496f19344c9cb9120160c33055c6c635750aa7d101fd03913583b0f635e7b276974220149c74f6a5d352",
+      "signatureHex": "d00d153892eff01a02965e8cbab06ca3386e23b641abfaada4f64f713f4ccc995b393c791cab1e49c0f7128f13d6c1ecf28291f752a2164b457326ce4f260a0e",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "verifyLinkKey/no-link-key",
+      "kind": "device_link",
+      "why": "A row with a signature and no link key (a server that stripped it): false, never an error.",
+      "call": "verifyLinkKey",
+      "signingKeyHex": "17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce",
+      "deviceId": "device-ada-laptop",
+      "commitmentHex": "968546e8633c36e9088d3c3e4256a1e10b0e8b698e45746392e12f3665f7b03a",
+      "deviceNonceHex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "signatureHex": "d00d153892eff01a02965e8cbab06ca3386e23b641abfaada4f64f713f4ccc995b393c791cab1e49c0f7128f13d6c1ecf28291f752a2164b457326ce4f260a0e",
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "id": "installRevocationTargets/removing-the-laptop",
+      "kind": "device_link",
+      "why": "Ada removes her laptop from her phone. The confirmation drew the laptop's entry and named the MLS row its entry hides, so the phone signs the revocation of that row's key: its approval chain vouches for that key, the link from the laptop's plain row to it is the one the phone pinned when it first listed them, and the person saw it named.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "laptop",
+        "denying": false,
+        "namedWith": [
+          "laptop-mls"
+        ],
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "laptop",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "laptop-mls",
+            "twinOf": "laptop",
+            "vouched": true,
+            "pinnedTwinOf": "laptop"
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": [
+          "laptop-mls"
+        ]
+      }
+    },
+    {
+      "id": "installRevocationTargets/a-hidden-twin-the-confirmation-did-not-name",
+      "kind": "device_link",
+      "why": "When Ada's phone first listed her devices, the server showed her iPad's MLS row linked to an \"Unknown Windows PC\" row it made up, and the phone pinned that link. The Device keys screen draws the invented row and hides the iPad's MLS row under it. Ada removes the invented row, and the confirmation named no row with it. The phone signs only the row Ada named, which no chain vouches for: nothing. The iPad's key, pinned and vouched, is not signed, because the confirmation never named it.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "windows-pc",
+        "denying": false,
+        "namedWith": [],
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "windows-pc",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "ipad-mls",
+            "twinOf": "windows-pc",
+            "vouched": true,
+            "pinnedTwinOf": "windows-pc"
+          },
+          {
+            "id": "ipad",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/a-denial-signs-nothing",
+      "kind": "device_link",
+      "why": "Ada denies a device waiting to be approved. Nothing is signed: a denial is no evidence about any seated device, so a server that lists the waiting row as a live device's twin gets no revocation of that device out of it.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "new",
+        "denying": true,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "new",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "laptop-mls",
+            "twinOf": "new",
+            "vouched": true,
+            "pinnedTwinOf": "laptop"
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/never-this-install",
+      "kind": "device_link",
+      "why": "A row the server links to the revoking install itself. Nothing is signed: a device never signs its own install's revocation, whichever row the removal names.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "fake",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "fake",
+            "twinOf": "phone",
+            "vouched": false
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/only-a-pinned-link",
+      "kind": "device_link",
+      "why": "The server now names the laptop's MLS row as the twin of a row it invented. Nothing is signed: the phone pinned that MLS row to the laptop's plain row, and a link it did not verify itself is never followed.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "fake",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "fake",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "laptop",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "laptop-mls",
+            "twinOf": "fake",
+            "vouched": true,
+            "pinnedTwinOf": "laptop"
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/only-a-vouched-key",
+      "kind": "device_link",
+      "why": "A row whose key the phone's approval chain does not vouch for. Nothing is signed: a device signs a revocation only of a key it let in or was let in by.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "ipad",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "ipad",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "ipad-mls",
+            "twinOf": "ipad",
+            "vouched": false,
+            "pinnedTwinOf": "ipad"
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/never-the-row-it-links-to",
+      "kind": "device_link",
+      "why": "The server listed Ada's old laptop's MLS row, the first time her phone saw it, as the twin of her tablet's MLS row, and the phone pinned that. Ada removes the old laptop: the phone signs the laptop's key and nothing else. A row's link is followed only toward the rows linked to it, never to the row it names, so the tablet, live and vouched, is not revoked.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "laptop-mls",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "laptop-mls",
+            "twinOf": "tablet-mls",
+            "vouched": true,
+            "pinnedTwinOf": "tablet-mls"
+          },
+          {
+            "id": "tablet",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "tablet-mls",
+            "twinOf": "tablet",
+            "vouched": true,
+            "pinnedTwinOf": "tablet"
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": [
+          "laptop-mls"
+        ]
+      }
+    },
+    {
+      "id": "installRevocationTargets/one-row-pinned-to-it",
+      "kind": "device_link",
+      "why": "The phone pinned two MLS rows to the laptop's plain row: the laptop's own, and the tablet's, which the server first listed under the laptop. An install has one MLS row, so one pin is the server's and nothing says which. Removing the laptop signs nothing.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "laptop",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "rows": [
+          {
+            "id": "laptop",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "laptop-mls",
+            "twinOf": "laptop",
+            "vouched": true,
+            "pinnedTwinOf": "laptop"
+          },
+          {
+            "id": "tablet-mls",
+            "twinOf": "laptop",
+            "vouched": true,
+            "pinnedTwinOf": "laptop"
+          },
+          {
+            "id": "phone",
+            "twinOf": "",
+            "vouched": false
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "vouched": true,
+            "pinnedTwinOf": "phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/a-pin-restore-signs-every-install-it-signed-out",
+      "kind": "device_link",
+      "why": "Ada restored her account key from her PIN on her phone, and the server signed her laptop and tablet out in the same registration, whose answer named their keys. Her intent is every other device, so the phone signs each install that answer named, approval chain or not: the laptop's and the tablet's MLS rows. A plain row has no key, and the phone's own row is never signed.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "ownKeys": [
+          "k-phone"
+        ],
+        "restoredSince": 1789516800,
+        "restoreSnapshot": [
+          "k-laptop",
+          "k-tablet"
+        ],
+        "rows": [
+          {
+            "id": "laptop",
+            "revokedAt": 1789516810,
+            "key": ""
+          },
+          {
+            "id": "laptop-mls",
+            "twinOf": "laptop",
+            "revokedAt": 1789516810,
+            "key": "k-laptop"
+          },
+          {
+            "id": "tablet-mls",
+            "revokedAt": 1789516810,
+            "key": "k-tablet"
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "revokedAt": 0,
+            "key": "k-phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": [
+          "laptop-mls",
+          "tablet-mls"
+        ]
+      }
+    },
+    {
+      "id": "installRevocationTargets/a-pin-restore-signs-nothing-it-did-not-sign-out",
+      "kind": "device_link",
+      "why": "After Ada's PIN restore the list shows a row revoked a day before it, one revoked hours after it, outside the hour the restore's own sign-out falls in, a revoked row whose key a live row still carries, the phone's own row revoked, and a row carrying the phone's key under another id. The restoring registration's answer named every one of those keys, and still none of them is a device the restore signed out, so the phone signs none of them.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "ownKeys": [
+          "k-phone"
+        ],
+        "restoredSince": 1789516800,
+        "restoreSnapshot": [
+          "k-old",
+          "k-later",
+          "k-live",
+          "k-other",
+          "k-phone"
+        ],
+        "rows": [
+          {
+            "id": "old-mls",
+            "revokedAt": 1789430400,
+            "key": "k-old"
+          },
+          {
+            "id": "later-mls",
+            "revokedAt": 1789527601,
+            "key": "k-later"
+          },
+          {
+            "id": "twin-mls",
+            "revokedAt": 1789516810,
+            "key": "k-live"
+          },
+          {
+            "id": "live-mls",
+            "revokedAt": 0,
+            "key": "k-live"
+          },
+          {
+            "id": "phone-mls",
+            "revokedAt": 1789516810,
+            "key": "k-other"
+          },
+          {
+            "id": "fake",
+            "revokedAt": 1789516810,
+            "key": "k-phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/a-pin-restore-signs-only-what-its-registration-answered",
+      "kind": "device_link",
+      "why": "The registration that restored Ada's account on her phone answered that it signed out her laptop, and the phone kept that. She then linked her tablet from the phone, and on a later read the server lists the tablet's key revoked ten minutes after the restore, inside the band, and leaves its live row out. The tablet's key was not in the restore's answer, so the phone signs the laptop and not the tablet: the server writes the revocation times and chooses when the list is read, and only what the restoring registration answered is the restore's.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "ownKeys": [
+          "k-phone"
+        ],
+        "restoredSince": 1789516800,
+        "restoreSnapshot": [
+          "k-laptop"
+        ],
+        "rows": [
+          {
+            "id": "laptop-mls",
+            "twinOf": "laptop",
+            "revokedAt": 1789516810,
+            "key": "k-laptop"
+          },
+          {
+            "id": "tablet-mls",
+            "revokedAt": 1789517400,
+            "key": "k-tablet"
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "revokedAt": 0,
+            "key": "k-phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": [
+          "laptop-mls"
+        ]
+      }
+    },
+    {
+      "id": "installRevocationTargets/a-pin-restore-signs-nothing-its-registration-did-not-answer",
+      "kind": "device_link",
+      "why": "Ada restored her account on her phone, but the phone kept no answer from the registration that restored (the answer was lost), and no approval since has closed the restore either. The server stalled every list read until Ada linked her laptop, then lists the laptop's key revoked inside the band. With nothing kept from the restore, the phone signs nothing: a list read the server timed never decides what a restore signed out.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "ownKeys": [
+          "k-phone"
+        ],
+        "restoredSince": 1789516800,
+        "rows": [
+          {
+            "id": "laptop-mls",
+            "twinOf": "laptop",
+            "revokedAt": 1789517400,
+            "key": "k-laptop"
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "revokedAt": 0,
+            "key": "k-phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    },
+    {
+      "id": "installRevocationTargets/a-pin-restore-an-approval-closed-signs-nothing",
+      "kind": "device_link",
+      "why": "Ada's phone approved her new laptop before it kept any answer from the restoring registration, so the approval closed the restore with nothing in it. The server then lists the laptop's key revoked inside the band. The restore's snapshot is empty, so the phone signs nothing.",
+      "call": "installRevocationTargets",
+      "request": {
+        "named": "",
+        "denying": false,
+        "ownDeviceIds": [
+          "phone",
+          "phone-mls"
+        ],
+        "ownKeys": [
+          "k-phone"
+        ],
+        "restoredSince": 1789516800,
+        "restoreSnapshot": [],
+        "rows": [
+          {
+            "id": "laptop-mls",
+            "twinOf": "laptop",
+            "revokedAt": 1789517400,
+            "key": "k-laptop"
+          },
+          {
+            "id": "phone-mls",
+            "twinOf": "phone",
+            "revokedAt": 0,
+            "key": "k-phone"
+          }
+        ]
+      },
+      "expect": {
+        "targets": []
+      }
+    }
+  ]
+}

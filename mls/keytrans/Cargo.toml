@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MIT
+[package]
+name = "peachy-keytrans"
+description = "Key transparency for Peachy: draft-ietf-keytrans-protocol-05 wire format, the KT_128_SHA256_Ed25519 suite, the log tree, and the Peachy profile's labels and values. No I/O, no async."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# The log's side: the prefix tree's storage, appending entries and answering
+# requests (src/prover/). OFF in every client build. The API runs it as a wasm
+# build for Node, so nothing under it may assume threads, a clock, a file
+# system or an OS random source: time and randomness come in as arguments.
+prover = []
+# The auditor's checks (src/auditor.rs). OFF in every client build; the auditor
+# runs them as a wasm build for Node, under the same rules as `prover`.
+auditor = []
+
+[dependencies]
+# Every version is pinned once, in the workspace manifest. Each of these was
+# already in the workspace graph at that version before this crate existed,
+# so the crate adds no third-party code to any build.
+sha2 = { workspace = true }
+hmac = { workspace = true }
+ed25519-dalek = { workspace = true }
+curve25519-dalek = { workspace = true }
+tls_codec = { workspace = true, features = ["derive"] }
+subtle = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+
+# The cross-client golden fixture's writer. It runs the prover, so it needs
+# `prover`.
+[[bin]]
+name = "gen_fixture"
+path = "src/bin/gen_fixture.rs"
+required-features = ["prover"]

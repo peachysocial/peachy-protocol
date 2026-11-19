@@ -1,0 +1,487 @@
+{
+  "_about": [
+    "Golden cases for the reaction lane frame and for how a lane of reactions folds into what a client shows.",
+    "Normative: docs/sealed-messages.md §Reactions.",
+    "The reactor is never in the payload: it is the MLS sender, read from the decrypted credential.",
+    "Parsing is strict JSON (RFC 8259): an unquoted key, a single-quoted string, a trailing comma or a duplicate key (compared after unescaping, at any depth) makes the payload not a reaction. A first-wins and a last-wins reader would otherwise show different emoji for one frame.",
+    "`call` names the question. `encode` gives a reaction, the exact keys the wire carries, and what parsing that wire back gives. `parse` gives a wire string and what a reader reads out of it, or null for anything that is not a valid reaction.",
+    "`fold` gives a lane of {sender, wire} in mailbox order and the reactions a client shows: per sender, the latest valid frame for this message wins and a clear removes that sender's reaction. `draw` maps emoji to sender ids sorted ascending, with no empty lists.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "cases": [
+    {
+      "id": "encode/set",
+      "why": "An ordinary reaction.",
+      "call": "encode",
+      "reaction": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "👍",
+        "remove": false
+      },
+      "keys": [
+        "e",
+        "m",
+        "peachy",
+        "v"
+      ],
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "👍",
+        "remove": false
+      }
+    },
+    {
+      "id": "encode/clear",
+      "why": "Clearing writes x and no e.",
+      "call": "encode",
+      "reaction": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "",
+        "remove": true
+      },
+      "keys": [
+        "m",
+        "peachy",
+        "v",
+        "x"
+      ],
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "",
+        "remove": true
+      }
+    },
+    {
+      "id": "encode/zwj",
+      "why": "A ZWJ family is one grapheme and survives the round trip byte for byte.",
+      "call": "encode",
+      "reaction": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "👨‍👩‍👧‍👦",
+        "remove": false
+      },
+      "keys": [
+        "e",
+        "m",
+        "peachy",
+        "v"
+      ],
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "👨‍👩‍👧‍👦",
+        "remove": false
+      }
+    },
+    {
+      "id": "parse/set",
+      "why": "The canonical set.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"❤️\"}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "❤️",
+        "remove": false
+      }
+    },
+    {
+      "id": "parse/clear",
+      "why": "The canonical clear.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"x\":true}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "",
+        "remove": true
+      }
+    },
+    {
+      "id": "parse/clear-with-e",
+      "why": "x wins over e.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\",\"x\":true}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "",
+        "remove": true
+      }
+    },
+    {
+      "id": "parse/x-false",
+      "why": "x:false is a set.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"🔥\",\"x\":false}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "🔥",
+        "remove": false
+      }
+    },
+    {
+      "id": "parse/skin-tone",
+      "why": "A modifier rides with its picture.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍🏽\"}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "👍🏽",
+        "remove": false
+      }
+    },
+    {
+      "id": "parse/flag",
+      "why": "A flag is two regional indicators and one grapheme.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"🇩🇪\"}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "🇩🇪",
+        "remove": false
+      }
+    },
+    {
+      "id": "parse/unknown-key",
+      "why": "Additive keys are ignored at v1.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"😂\",\"z\":\"later\"}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "😂",
+        "remove": false
+      }
+    },
+    {
+      "id": "parse/resend",
+      "why": "Another lane payload is not a reaction.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"resend\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"d\":\"dev\",\"t\":\"words\",\"a\":[]}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-peachy",
+      "why": "A payload with no peachy key is not a reaction.",
+      "call": "parse",
+      "wire": "{\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/v2",
+      "why": "A version from the future is refused, never guessed at.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":2,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-v",
+      "why": "A missing version is refused.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-m",
+      "why": "A reaction to nothing is refused.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/empty-m",
+      "why": "An empty target is refused.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-e",
+      "why": "A set with no emoji is refused.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/words",
+      "why": "Words are not an emoji.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"CALL 555-0100 NOW\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/two",
+      "why": "Two emoji are two graphemes.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/digit",
+      "why": "A bare digit is an Emoji_Component with no picture.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"5\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/letter",
+      "why": "A letter is not an emoji.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"a\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/too-long",
+      "why": "More than 32 UTF-8 bytes is refused before anything counts graphemes.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍‍👍‍👍‍👍‍👍‍👍‍👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/not-json",
+      "why": "Not JSON at all.",
+      "call": "parse",
+      "wire": "👍",
+      "expect": null
+    },
+    {
+      "id": "parse/json-array",
+      "why": "JSON that is not an object.",
+      "call": "parse",
+      "wire": "[1,2]",
+      "expect": null
+    },
+    {
+      "id": "parse/x-string",
+      "why": "x must be a boolean; a string is not a clear, and with no e this is nothing.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"x\":\"true\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/e-number",
+      "why": "e must be a string.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":1}",
+      "expect": null
+    },
+    {
+      "id": "parse/unquoted-key",
+      "why": "An unquoted key is not JSON, however lenient a platform parser is.",
+      "call": "parse",
+      "wire": "{peachy:\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/single-quoted",
+      "why": "A single-quoted string is not JSON.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":'11111111-1111-1111-1111-111111111111',\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/trailing-comma",
+      "why": "A trailing comma is not JSON.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\",}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-e",
+      "why": "Two e keys: a first-wins and a last-wins reader would draw different emoji, so neither draws one.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\",\"e\":\"👎\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-m",
+      "why": "Two targets is no target.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"m\":\"22222222-2222-2222-2222-222222222222\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-same-value",
+      "why": "A duplicate is refused even when both copies agree.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-escaped",
+      "why": "Keys are compared after unescaping: \\u0065 is e.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\",\"\\u0065\":\"👎\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-nested",
+      "why": "A duplicate key anywhere refuses the payload, even inside an ignored additive key.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\",\"z\":{\"a\":1,\"a\":2}}",
+      "expect": null
+    },
+    {
+      "id": "parse/canonically-equivalent-keys-are-distinct",
+      "why": "Keys are compared by code point: \"\\u00e9\" and \"e\\u0301\" are two keys, so this is no duplicate — even where a string type compares by canonical equivalence.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\",\"\\u00e9\":1,\"e\\u0301\":2}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "👍",
+        "remove": false
+      }
+    },
+    {
+      "id": "parse/same-key-two-objects",
+      "why": "The same key in two sibling objects is not a duplicate.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\",\"z\":[{\"a\":1},{\"a\":2}]}",
+      "expect": {
+        "messageId": "11111111-1111-1111-1111-111111111111",
+        "emoji": "👍",
+        "remove": false
+      }
+    },
+    {
+      "id": "fold/one",
+      "why": "One sender, one reaction.",
+      "call": "fold",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "lane": [
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        }
+      ],
+      "draw": {
+        "👍": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "id": "fold/latest-wins",
+      "why": "A sender changes their mind; the later entry wins.",
+      "call": "fold",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "lane": [
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"❤️\"}"
+        }
+      ],
+      "draw": {
+        "❤️": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "id": "fold/clear",
+      "why": "A clear removes the sender's reaction.",
+      "call": "fold",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "lane": [
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"x\":true}"
+        }
+      ],
+      "draw": {}
+    },
+    {
+      "id": "fold/clear-only-own",
+      "why": "A clear removes only its sender's.",
+      "call": "fold",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "lane": [
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"x\":true}"
+        }
+      ],
+      "draw": {
+        "👍": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "id": "fold/two-senders",
+      "why": "Two senders on one emoji are drawn together, sorted.",
+      "call": "fold",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "lane": [
+        {
+          "sender": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        }
+      ],
+      "draw": {
+        "👍": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        ]
+      }
+    },
+    {
+      "id": "fold/invalid-skipped",
+      "why": "An invalid entry is skipped and does not clear the earlier one.",
+      "call": "fold",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "lane": [
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"CALL NOW\"}"
+        }
+      ],
+      "draw": {
+        "👍": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "id": "fold/other-message",
+      "why": "An entry for another message does not touch this one.",
+      "call": "fold",
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "lane": [
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"11111111-1111-1111-1111-111111111111\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"22222222-2222-2222-2222-222222222222\",\"x\":true}"
+        }
+      ],
+      "draw": {
+        "👍": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        ]
+      }
+    }
+  ]
+}

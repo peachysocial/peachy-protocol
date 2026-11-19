@@ -1,0 +1,57 @@
+(* SPDX-License-Identifier: MIT *)
+(* forward_secrecy.pv: both members' devices are seized AFTER the call has
+   moved on to a later epoch.
+
+   Scenario: A and B share epoch 1 and a call runs in it. A self-updates to
+   epoch 2. Then (phase 1) the attacker takes everything both devices still
+   hold: the epoch-2 secret, every current leaf HPKE key (B's has not rotated,
+   so it is the very key A's commit was sealed to), and both signature keys.
+
+   What each device must have deleted by then, and what this file assumes:
+   the epoch-1 secret and every epoch-1 call key, once the grace window
+   (CALL_KEY_GRACE_MS, 10 s) has passed. The core's exporter already answers
+   only for the current epoch; the requirement is on the clients' key rings.
+   forward_secrecy_control.pv is the same run with that deletion skipped.
+
+   Expected: epoch-1 media and keys stay secret. Forward secrecy is per
+   EPOCH: there is no ratchet inside one, so a seizure during epoch 2 reads
+   all of epoch 2, including what was said before the seizure. *)
+
+free es1: key [private].
+free gid: bitstring.
+free cid: bitstring.
+free leafA1, leafB1, leafA2: hskey [private].
+free sigA, sigB: sskey [private].
+free cs2: key [private].
+free mA1, mB1, mA2: bitstring [private].
+
+query attacker(mA1).
+query attacker(mB1).
+query attacker(es1).
+query attacker(call_sender_key(exporter(es1, L_CALL, cid), LEAF_A)).
+query attacker(exporter(es1, L_LIVE, EMPTY)).
+
+(* Sanity: expected FALSE, i.e. epoch 2 is readable after the seizure. *)
+query attacker(mA2).
+
+process
+  out(net, (hpk(leafA1), hpk(leafB1), spk(sigA), spk(sigB)));
+  out(net, exporter(es1, L_SEALED_SENDER, gid));
+  (
+      FrameSender(E1, es1, cid, LEAF_A, mA1)
+    | FrameSender(E1, es1, cid, LEAF_B, mB1)
+    | (
+        let es2 = next_epoch(init_secret(es1), cs2) in
+        let body = (E2, hpke_seal(hpk(leafB1), cs2), hpk(leafA2)) in
+        out(net, (body, sign(sigA, body)));
+        out(net, exporter(es2, L_SEALED_SENDER, gid));
+        (
+            FrameSender(E2, es2, cid, LEAF_A, mA2)
+          | (
+              phase 1;
+              (* the seizure: what both devices hold in epoch 2 *)
+              out(net, (es2, leafA2, leafB1, sigA, sigB))
+            )
+        )
+      )
+  )

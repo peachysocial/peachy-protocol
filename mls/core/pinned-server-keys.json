@@ -1,0 +1,18 @@
+{
+  "about": [
+    "The server keys that sign device credentials, built into every client through the core (src/server_key_pins.rs).",
+    "Each set lists every device key its server publishes, current and retired: a kid and the base64 raw Ed25519 public key.",
+    "production: the production API. development: the fixed key every local test server signs with, whose seed is public; only a build with the development-keys feature carries it, and in any other build the set is empty.",
+    "A client compares what the server publishes against its set and logs any difference, and trusts only the published keys its set holds.",
+    "The production API refuses to start while it publishes a key the oldest build each platform still serves does not carry: a production key may name carriedFrom, each platform's first release carrying it (only the first key, 8730c349, omits it, carried by every build; any other key without it, or a platform it does not name: by no release yet), read against the API's minimum supported version for each platform. Add a new key here with carriedFrom {}, ship the builds, record their versions and raise the minimums before making it current.",
+    "standby: carried ahead of need for a compromised current key, its seed offline and in no environment (docs/identity.md, The trusted server keys)."
+  ],
+  "servers": {
+    "production": [
+      { "kid": "8730c349", "publicKey": "H6qyFNpHLMcUuB+Nfv1XtbPU0P01Ni7TQKPi1870a2g=" }
+    ],
+    "development": [
+      { "kid": "f8f6eaa4", "publicKey": "nHq6JH1Lmot5tW6rGCV05fjNlUAomh+JWgaeAFtYs8o=" }
+    ]
+  }
+}

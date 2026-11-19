@@ -1,0 +1,1114 @@
+{
+  "_about": [
+    "Golden cases for the history share lane frame, its chunking arithmetic, and which words may fill a message's seat.",
+    "Normative: docs/sealed-messages.md §History shares.",
+    "`parse`: `wire` is the decrypted application payload. `expect` is null when it is not a share (never an error: an unknown payload is ignored), or the fields a reader may use: share, chunk, chunks, window, for, with, and the surviving messages. A message entry missing an id, an author or a timestamp is dropped and the rest of the share still parses. Unknown keys are ignored at both levels.",
+    "`version` 2 is the only version, and a share MUST carry `\"to\": \"person\"`.",
+    "A share for several people names the first in `for` and all of them in `with`, written only when there is more than one. A reader's recipients are `with`'s non-empty strings, once each, in order, with `for` first when the list leaves it out; with no `with` (or one that is not an array) they are just `for`. In a parse `expect`, absent `with` is [`for`], or [] for an empty `for`.",
+    "Entries carry the frame's optional `i`, `r` and `b`, read with the frame's rules; a bad one never drops the entry. In `expect`, an absent `clientId`, `replyTo` or `broadcast` means \"\", \"\" or false.",
+    "`cost` and `chunk`: the split is arithmetic on UTF-8 byte counts, never on a serialized length, so that every language splits the same way. cost(m) = utf8(m.id) + utf8(m.by) + 2 * utf8(m.text) + `entryOverheadBytes`, plus utf8(i) + utf8(r) when present. A chunk holds messages while `envelopeOverheadBytes` + sum(cost) <= the budget, and never holds none: one oversized message rides alone. The cases use small budgets so the arithmetic is readable; the real budget is `maxChunkBytes`.",
+    "`roundTrip`: the messages written must read back equal, thread keys and recipients included.",
+    "`seat`: whether words arriving for a message's seat may replace what is held. `held` is null (no row and no words), `unread` (a message this device was sent and could not open), `author` (the author's own words) or `quotation` (a history share); `incoming` is `author` or `quotation`. The author's own words always store; a quotation only fills a seat that holds nothing, never one this device was sent.",
+    "`admit`: whether a shared message may make a seat at all: only when its `at` falls in a whole second strictly earlier than the second of `joinedAt`, when this device joined the group (null when unknown, which admits nothing). Both are the server's time to the second; the millisecond of `at` is only the sharer's delivery order. Other entries are dropped and the rest of the share still files.",
+    "`joinLine`: the `joinedAt` that `admit` takes: `latest`, the server time of the Welcome that seated this device most recently (a re-add or a rejoin is a later Welcome), else `first`, the first join kept, else `registered`, this device's registration time; null when none is known, and then the share is not dropped but read again later.",
+    "`share`: the whole decision for one entry: `admit` against `joinLine` (`first`, `latest`, `registered`), and an `at` in a whole second later than `heldBefore`, the newest row the device holds in the conversation from before the line that is not a quotation, rows a hand-off from the account's own devices carried included (null when it holds none). A share never writes in among history the device holds, whatever its first join.",
+    "`recheck`: after a history transfer imports rows into a conversation, its quotations are checked again against the new `heldBefore`, and every one in a whole second at or before it is deleted, whichever arrived first. `rows` are the conversation's rows, `line` is `joinLine`, and `expect` is the ids deleted, in row order. A held quotation the transfer carries is replaced by its copy, which is then held.",
+    "Object keys and ids in these cases are opaque test strings; a reader does not interpret them beyond the rules cited above.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "version": 2,
+  "maxChunkBytes": 131072,
+  "entryOverheadBytes": 64,
+  "envelopeOverheadBytes": 256,
+  "cases": [
+    {
+      "name": "an ordinary sentence is not a bundle",
+      "call": "parse",
+      "wire": "shall we ask something about the ferry times",
+      "expect": null
+    },
+    {
+      "name": "json that is not ours is not a bundle",
+      "call": "parse",
+      "wire": "{\"peachy\":\"something-else\",\"v\":1}",
+      "expect": null
+    },
+    {
+      "name": "version 2 that does not say who it is for is not a bundle it may read",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"share\":\"s1\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"\",\"messages\":[]}",
+      "expect": null
+    },
+    {
+      "name": "version 2 naming a recipient other than a person is a later format, not a guess",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"assistant\",\"share\":\"s1\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"actor-bob\",\"messages\":[]}",
+      "expect": null
+    },
+    {
+      "name": "a version this build does not know is not a bundle it may read",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":3,\"to\":\"person\",\"share\":\"s1\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"actor-bob\",\"messages\":[]}",
+      "expect": null
+    },
+    {
+      "name": "a share with a PERSON is version 2 and says so",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"share\":\"7c2e\",\"chunk\":0,\"chunks\":1,\"window\":\"days:30\",\"for\":\"actor-bob\",\"to\":\"person\",\"messages\":[{\"id\":\"m1\",\"by\":\"actor-ada\",\"at\":1757000000000,\"text\":\"who's in for the weekend\"}]}",
+      "expect": {
+        "share": "7c2e",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "days:30",
+        "for": "actor-bob",
+        "messages": [
+          {
+            "id": "m1",
+            "by": "actor-ada",
+            "at": 1757000000000,
+            "text": "who's in for the weekend"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a json array is not a bundle",
+      "call": "parse",
+      "wire": "[1,2,3]",
+      "expect": null
+    },
+    {
+      "name": "a share with several people names every one of them",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s20\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"actor-bob\",\"with\":[\"actor-bob\",\"actor-cal\",\"actor-dee\"],\"messages\":[]}",
+      "expect": {
+        "share": "s20",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "everything",
+        "for": "actor-bob",
+        "with": [
+          "actor-bob",
+          "actor-cal",
+          "actor-dee"
+        ],
+        "messages": []
+      }
+    },
+    {
+      "name": "a list that leaves out the first person still has them, first",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s21\",\"chunk\":0,\"chunks\":1,\"window\":\"nothing\",\"for\":\"actor-bob\",\"with\":[\"actor-cal\"],\"messages\":[]}",
+      "expect": {
+        "share": "s21",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "nothing",
+        "for": "actor-bob",
+        "with": [
+          "actor-bob",
+          "actor-cal"
+        ],
+        "messages": []
+      }
+    },
+    {
+      "name": "a bad entry in the list drops only itself, and a repeat counts once",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s22\",\"chunk\":0,\"chunks\":1,\"window\":\"days:30\",\"for\":\"actor-bob\",\"with\":[\"actor-bob\",\"\",7,null,\"actor-cal\",\"actor-cal\"],\"messages\":[]}",
+      "expect": {
+        "share": "s22",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "days:30",
+        "for": "actor-bob",
+        "with": [
+          "actor-bob",
+          "actor-cal"
+        ],
+        "messages": []
+      }
+    },
+    {
+      "name": "a list that is not an array is no list, and the share is for `for` alone",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s23\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"actor-bob\",\"with\":\"actor-cal\",\"messages\":[]}",
+      "expect": {
+        "share": "s23",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "everything",
+        "for": "actor-bob",
+        "with": [
+          "actor-bob"
+        ],
+        "messages": []
+      }
+    },
+    {
+      "name": "a chunk index outside its own count is not a bundle",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s1\",\"chunk\":3,\"chunks\":2,\"window\":\"everything\",\"for\":\"\",\"messages\":[]}",
+      "expect": null
+    },
+    {
+      "name": "a share with no id is not a bundle, because nothing could key its record",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"\",\"messages\":[]}",
+      "expect": null
+    },
+    {
+      "name": "the empty share, which is how \"no history was shared\" is said out loud",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"3f1a\",\"chunk\":0,\"chunks\":1,\"window\":\"nothing\",\"for\":\"actor-fay\",\"messages\":[]}",
+      "expect": {
+        "share": "3f1a",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "nothing",
+        "for": "actor-fay",
+        "messages": []
+      }
+    },
+    {
+      "name": "two messages, with their original authors and times",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"3f1a\",\"chunk\":0,\"chunks\":1,\"window\":\"days:30\",\"for\":\"actor-fay\",\"messages\":[{\"id\":\"m1\",\"by\":\"actor-ada\",\"at\":1757000000000,\"text\":\"who's in for the weekend\"},{\"id\":\"m2\",\"by\":\"actor-fay\",\"at\":1757000060000,\"text\":\"me\"}]}",
+      "expect": {
+        "share": "3f1a",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "days:30",
+        "for": "actor-fay",
+        "messages": [
+          {
+            "id": "m1",
+            "by": "actor-ada",
+            "at": 1757000000000,
+            "text": "who's in for the weekend"
+          },
+          {
+            "id": "m2",
+            "by": "actor-fay",
+            "at": 1757000060000,
+            "text": "me"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown keys are ignored, at both levels",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s9\",\"chunk\":1,\"chunks\":2,\"window\":\"everything\",\"for\":\"\",\"later\":{\"a\":1},\"messages\":[{\"id\":\"m1\",\"by\":\"actor-ada\",\"at\":1,\"text\":\"hi\",\"reactions\":7}]}",
+      "expect": {
+        "share": "s9",
+        "chunk": 1,
+        "chunks": 2,
+        "window": "everything",
+        "for": "",
+        "messages": [
+          {
+            "id": "m1",
+            "by": "actor-ada",
+            "at": 1,
+            "text": "hi"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a message with no author is dropped and the rest of the share survives",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s9\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"\",\"messages\":[{\"id\":\"m1\",\"by\":\"\",\"at\":1,\"text\":\"hi\"},{\"id\":\"m2\",\"by\":\"actor-ada\",\"at\":2,\"text\":\"still here\"}]}",
+      "expect": {
+        "share": "s9",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "everything",
+        "for": "",
+        "messages": [
+          {
+            "id": "m2",
+            "by": "actor-ada",
+            "at": 2,
+            "text": "still here"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a reply keeps its thread: its own id, its parent and whether it was broadcast",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s10\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"actor-fay\",\"messages\":[{\"id\":\"m1\",\"by\":\"actor-ada\",\"at\":1,\"text\":\"parent\",\"i\":\"11111111-1111-4111-8111-111111111111\"},{\"id\":\"m2\",\"by\":\"actor-bob\",\"at\":2,\"text\":\"reply\",\"i\":\"22222222-2222-4222-8222-222222222222\",\"r\":\"11111111-1111-4111-8111-111111111111\"},{\"id\":\"m3\",\"by\":\"actor-ada\",\"at\":3,\"text\":\"broadcast reply\",\"i\":\"33333333-3333-4333-8333-333333333333\",\"r\":\"11111111-1111-4111-8111-111111111111\",\"b\":true}]}",
+      "expect": {
+        "share": "s10",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "everything",
+        "for": "actor-fay",
+        "messages": [
+          {
+            "id": "m1",
+            "by": "actor-ada",
+            "at": 1,
+            "text": "parent",
+            "clientId": "11111111-1111-4111-8111-111111111111"
+          },
+          {
+            "id": "m2",
+            "by": "actor-bob",
+            "at": 2,
+            "text": "reply",
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "replyTo": "11111111-1111-4111-8111-111111111111"
+          },
+          {
+            "id": "m3",
+            "by": "actor-ada",
+            "at": 3,
+            "text": "broadcast reply",
+            "clientId": "33333333-3333-4333-8333-333333333333",
+            "replyTo": "11111111-1111-4111-8111-111111111111",
+            "broadcast": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "thread ids are read with the frame's rules, and a bad one drops only itself",
+      "call": "parse",
+      "wire": "{\"peachy\":\"history\",\"v\":2,\"to\":\"person\",\"share\":\"s11\",\"chunk\":0,\"chunks\":1,\"window\":\"everything\",\"for\":\"\",\"messages\":[{\"id\":\"m1\",\"by\":\"actor-ada\",\"at\":1,\"text\":\"upper case\",\"i\":\"AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA\",\"r\":\"BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB\"},{\"id\":\"m2\",\"by\":\"actor-ada\",\"at\":2,\"text\":\"names itself\",\"i\":\"22222222-2222-4222-8222-222222222222\",\"r\":\"22222222-2222-4222-8222-222222222222\",\"b\":true},{\"id\":\"m3\",\"by\":\"actor-ada\",\"at\":3,\"text\":\"not uuids\",\"i\":\"nope\",\"r\":7,\"b\":true},{\"id\":\"m4\",\"by\":\"actor-ada\",\"at\":4,\"text\":\"broadcast with no parent\",\"i\":\"44444444-4444-4444-8444-444444444444\",\"b\":true},{\"id\":\"m5\",\"by\":\"actor-ada\",\"at\":5,\"text\":\"b must be true\",\"i\":\"55555555-5555-4555-8555-555555555555\",\"r\":\"11111111-1111-4111-8111-111111111111\",\"b\":1}]}",
+      "expect": {
+        "share": "s11",
+        "chunk": 0,
+        "chunks": 1,
+        "window": "everything",
+        "for": "",
+        "messages": [
+          {
+            "id": "m1",
+            "by": "actor-ada",
+            "at": 1,
+            "text": "upper case",
+            "clientId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "replyTo": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+          },
+          {
+            "id": "m2",
+            "by": "actor-ada",
+            "at": 2,
+            "text": "names itself",
+            "clientId": "22222222-2222-4222-8222-222222222222"
+          },
+          {
+            "id": "m3",
+            "by": "actor-ada",
+            "at": 3,
+            "text": "not uuids"
+          },
+          {
+            "id": "m4",
+            "by": "actor-ada",
+            "at": 4,
+            "text": "broadcast with no parent",
+            "clientId": "44444444-4444-4444-8444-444444444444"
+          },
+          {
+            "id": "m5",
+            "by": "actor-ada",
+            "at": 5,
+            "text": "b must be true",
+            "clientId": "55555555-5555-4555-8555-555555555555",
+            "replyTo": "11111111-1111-4111-8111-111111111111"
+          }
+        ]
+      }
+    },
+    {
+      "name": "the cost of a plain ascii message",
+      "call": "cost",
+      "message": {
+        "id": "m1",
+        "by": "actor-ada",
+        "at": 1,
+        "text": "one"
+      },
+      "expect": 81
+    },
+    {
+      "name": "the cost counts bytes and not characters",
+      "call": "cost",
+      "message": {
+        "id": "m2",
+        "by": "actor-fay",
+        "at": 2,
+        "text": "me, and I'll drive — ☂"
+      },
+      "expect": 127
+    },
+    {
+      "name": "the cost counts a message's thread ids",
+      "call": "cost",
+      "message": {
+        "id": "m3",
+        "by": "actor-ada",
+        "at": 3,
+        "text": "ok",
+        "clientId": "11111111-1111-4111-8111-111111111111",
+        "replyTo": "22222222-2222-4222-8222-222222222222",
+        "broadcast": true
+      },
+      "expect": 151
+    },
+    {
+      "name": "one chunk when everything fits",
+      "call": "chunk",
+      "share": "s1",
+      "window": "everything",
+      "for": "actor-fay",
+      "maxChunkBytes": 4096,
+      "messages": [
+        {
+          "id": "m1",
+          "by": "actor-ada",
+          "at": 1,
+          "text": "one"
+        },
+        {
+          "id": "m2",
+          "by": "actor-ada",
+          "at": 2,
+          "text": "two"
+        }
+      ],
+      "expect": [
+        [
+          "m1",
+          "m2"
+        ]
+      ]
+    },
+    {
+      "name": "a budget that fits one message at a time",
+      "call": "chunk",
+      "share": "s1",
+      "window": "everything",
+      "for": "actor-fay",
+      "maxChunkBytes": 350,
+      "messages": [
+        {
+          "id": "m1",
+          "by": "actor-ada",
+          "at": 1,
+          "text": "one"
+        },
+        {
+          "id": "m2",
+          "by": "actor-ada",
+          "at": 2,
+          "text": "two"
+        },
+        {
+          "id": "m3",
+          "by": "actor-ada",
+          "at": 3,
+          "text": "three"
+        }
+      ],
+      "expect": [
+        [
+          "m1"
+        ],
+        [
+          "m2"
+        ],
+        [
+          "m3"
+        ]
+      ]
+    },
+    {
+      "name": "a message bigger than the whole budget rides alone rather than being lost",
+      "call": "chunk",
+      "share": "s1",
+      "window": "everything",
+      "for": "",
+      "maxChunkBytes": 32,
+      "messages": [
+        {
+          "id": "m1",
+          "by": "actor-ada",
+          "at": 1,
+          "text": "a sentence longer than the budget"
+        }
+      ],
+      "expect": [
+        [
+          "m1"
+        ]
+      ]
+    },
+    {
+      "name": "no messages is still one chunk, because the record has to be said",
+      "call": "chunk",
+      "share": "s1",
+      "window": "nothing",
+      "for": "actor-fay",
+      "maxChunkBytes": 4096,
+      "messages": [],
+      "expect": [
+        []
+      ]
+    },
+    {
+      "name": "a thread survives the round trip, so every codec writes what it reads",
+      "call": "roundTrip",
+      "share": "s12",
+      "window": "everything",
+      "for": "actor-fay",
+      "maxChunkBytes": 4096,
+      "messages": [
+        {
+          "id": "m1",
+          "by": "actor-ada",
+          "at": 1,
+          "text": "parent",
+          "clientId": "11111111-1111-4111-8111-111111111111"
+        },
+        {
+          "id": "m2",
+          "by": "actor-bob",
+          "at": 2,
+          "text": "reply",
+          "clientId": "22222222-2222-4222-8222-222222222222",
+          "replyTo": "11111111-1111-4111-8111-111111111111"
+        },
+        {
+          "id": "m3",
+          "by": "actor-ada",
+          "at": 3,
+          "text": "broadcast",
+          "clientId": "33333333-3333-4333-8333-333333333333",
+          "replyTo": "11111111-1111-4111-8111-111111111111",
+          "broadcast": true
+        },
+        {
+          "id": "m4",
+          "by": "actor-ada",
+          "at": 4,
+          "text": "a message with no client id"
+        }
+      ],
+      "expect": [
+        [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ]
+      ]
+    },
+    {
+      "name": "what one codec writes another codec reads",
+      "call": "roundTrip",
+      "share": "s2",
+      "window": "days:30",
+      "for": "actor-fay",
+      "maxChunkBytes": 450,
+      "messages": [
+        {
+          "id": "m1",
+          "by": "actor-ada",
+          "at": 1757000000000,
+          "text": "who's in for the weekend"
+        },
+        {
+          "id": "m2",
+          "by": "actor-fay",
+          "at": 1757000060000,
+          "text": "me, and I'll drive — ☂"
+        }
+      ],
+      "expect": [
+        [
+          "m1"
+        ],
+        [
+          "m2"
+        ]
+      ]
+    },
+    {
+      "name": "a share with a person survives the round trip as a share with a person",
+      "call": "roundTrip",
+      "share": "s3",
+      "window": "everything",
+      "for": "actor-bob",
+      "maxChunkBytes": 450,
+      "messages": [
+        {
+          "id": "m1",
+          "by": "actor-ada",
+          "at": 1757000000000,
+          "text": "who's in for the weekend"
+        },
+        {
+          "id": "m2",
+          "by": "actor-fay",
+          "at": 1757000060000,
+          "text": "me, and I'll drive — ☂"
+        }
+      ],
+      "expect": [
+        [
+          "m1"
+        ],
+        [
+          "m2"
+        ]
+      ]
+    },
+    {
+      "name": "a share with several people survives the round trip naming all of them",
+      "call": "roundTrip",
+      "share": "s4",
+      "window": "days:30",
+      "for": "actor-bob",
+      "with": [
+        "actor-bob",
+        "actor-cal"
+      ],
+      "maxChunkBytes": 450,
+      "messages": [
+        {
+          "id": "m1",
+          "by": "actor-ada",
+          "at": 1757000000000,
+          "text": "who's in for the weekend"
+        },
+        {
+          "id": "m2",
+          "by": "actor-fay",
+          "at": 1757000060000,
+          "text": "me, and I'll drive — ☂"
+        }
+      ],
+      "expect": [
+        [
+          "m1"
+        ],
+        [
+          "m2"
+        ]
+      ]
+    },
+    {
+      "name": "an empty seat takes a quotation",
+      "call": "seat",
+      "held": null,
+      "incoming": "quotation",
+      "expect": "store"
+    },
+    {
+      "name": "an empty seat takes the author's own words",
+      "call": "seat",
+      "held": null,
+      "incoming": "author",
+      "expect": "store"
+    },
+    {
+      "name": "the author's own words supersede a quotation, and the shared-by line goes with it",
+      "call": "seat",
+      "held": "quotation",
+      "incoming": "author",
+      "expect": "store"
+    },
+    {
+      "name": "a quotation never overwrites words the author signed",
+      "call": "seat",
+      "held": "author",
+      "incoming": "quotation",
+      "expect": "keep"
+    },
+    {
+      "name": "a second quotation never rewrites the first",
+      "call": "seat",
+      "held": "quotation",
+      "incoming": "quotation",
+      "expect": "keep"
+    },
+    {
+      "name": "the author's own later words replace their earlier ones, as an edit does",
+      "call": "seat",
+      "held": "author",
+      "incoming": "author",
+      "expect": "store"
+    },
+    {
+      "name": "a quotation never fills a message this device was sent and could not open",
+      "call": "seat",
+      "held": "unread",
+      "incoming": "quotation",
+      "expect": "keep"
+    },
+    {
+      "name": "the author's own words fill a message this device could not open",
+      "call": "seat",
+      "held": "unread",
+      "incoming": "author",
+      "expect": "store"
+    },
+    {
+      "name": "a message from before this device joined is history",
+      "call": "admit",
+      "at": 1790000000000,
+      "joinedAt": 1790000060000,
+      "expect": true
+    },
+    {
+      "name": "a message from the moment this device joined is not history",
+      "call": "admit",
+      "at": 1790000060000,
+      "joinedAt": 1790000060000,
+      "expect": false
+    },
+    {
+      "name": "a message from after this device joined was sent to it, never shared with it",
+      "call": "admit",
+      "at": 1790000060001,
+      "joinedAt": 1790000060000,
+      "expect": false
+    },
+    {
+      "name": "with no join time known, nothing is admitted",
+      "call": "admit",
+      "at": 1790000000000,
+      "joinedAt": null,
+      "expect": false
+    },
+    {
+      "name": "a message from earlier in the join's own second is not history: both are the server's whole second",
+      "call": "admit",
+      "at": 1790000060100,
+      "joinedAt": 1790000060500,
+      "expect": false
+    },
+    {
+      "name": "a message from the second before the join is history",
+      "call": "admit",
+      "at": 1790000059999,
+      "joinedAt": 1790000060500,
+      "expect": true
+    },
+    {
+      "name": "rejoined: a message between the first join and the latest is history",
+      "call": "admit",
+      "at": 1795000000000,
+      "joinedAt": 1798000000000,
+      "expect": true
+    },
+    {
+      "name": "rejoined: the latest Welcome is the line",
+      "call": "joinLine",
+      "latest": 1798000000000,
+      "first": 1790000000000,
+      "registered": 1780000000000,
+      "expect": 1798000000000
+    },
+    {
+      "name": "re-added after leaving: the Welcome of the re-add is the line",
+      "call": "joinLine",
+      "latest": 1798000000000,
+      "first": 1790000000000,
+      "registered": null,
+      "expect": 1798000000000
+    },
+    {
+      "name": "a join from before the latest was kept: the first join, a lower bound",
+      "call": "joinLine",
+      "latest": null,
+      "first": 1790000000000,
+      "registered": 1780000000000,
+      "expect": 1790000000000
+    },
+    {
+      "name": "no join stamped: this device's registration, a lower bound",
+      "call": "joinLine",
+      "latest": null,
+      "first": null,
+      "registered": 1780000000000,
+      "expect": 1780000000000
+    },
+    {
+      "name": "nothing known: no line, so the share waits",
+      "call": "joinLine",
+      "latest": null,
+      "first": null,
+      "registered": null,
+      "expect": null
+    },
+    {
+      "name": "a newcomer is shared what came before its only join",
+      "call": "share",
+      "at": 1791158400000,
+      "first": 1793750400000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": null,
+      "expect": true
+    },
+    {
+      "name": "re-added after leaving: what came while it was away is history",
+      "call": "share",
+      "at": 1791158400000,
+      "first": 1767225600000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800000,
+      "expect": true
+    },
+    {
+      "name": "re-added after leaving: a message inside the history it still holds is refused",
+      "call": "share",
+      "at": 1781395200000,
+      "first": 1767225600000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800000,
+      "expect": false
+    },
+    {
+      "name": "re-added: a message from before it first joined is refused too, while it holds history after it",
+      "call": "share",
+      "at": 1765584000000,
+      "first": 1767225600000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800000,
+      "expect": false
+    },
+    {
+      "name": "a missed message in the same second as the newest one it holds is refused",
+      "call": "share",
+      "at": 1786060800400,
+      "first": 1767225600000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800500,
+      "expect": false
+    },
+    {
+      "name": "a missed message from the second after the newest one it holds is history",
+      "call": "share",
+      "at": 1786060801000,
+      "first": 1767225600000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800500,
+      "expect": true
+    },
+    {
+      "name": "a message from after the latest Welcome was sent to it, never shared with it",
+      "call": "share",
+      "at": 1793750401000,
+      "first": 1767225600000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800000,
+      "expect": false
+    },
+    {
+      "name": "with no first join kept, the gap after what it holds is still history",
+      "call": "share",
+      "at": 1791158400000,
+      "first": null,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800000,
+      "expect": true
+    },
+    {
+      "name": "with no first join kept, history it holds is never written into",
+      "call": "share",
+      "at": 1781395200000,
+      "first": null,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800000,
+      "expect": false
+    },
+    {
+      "name": "only a registration time known: history before it",
+      "call": "share",
+      "at": 1765584000000,
+      "first": null,
+      "latest": null,
+      "registered": 1767139200000,
+      "heldBefore": null,
+      "expect": true
+    },
+    {
+      "name": "a linked device holding history handed over from before its only join: nothing is written into it",
+      "call": "share",
+      "at": 1781395200000,
+      "first": 1793750400000,
+      "latest": 1793750400000,
+      "registered": null,
+      "heldBefore": 1786060800000,
+      "expect": false
+    },
+    {
+      "name": "nothing known: nothing is admitted, and the share waits",
+      "call": "share",
+      "at": 1791158400000,
+      "first": null,
+      "latest": null,
+      "registered": null,
+      "heldBefore": null,
+      "expect": false
+    },
+    {
+      "name": "a share filed before the hand-off: the forged quotation in the old gap goes",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "own-jan",
+          "at": 1767225600000,
+          "quotation": false
+        },
+        {
+          "id": "forged-jun",
+          "at": 1780272000000,
+          "quotation": true
+        },
+        {
+          "id": "own-aug",
+          "at": 1785542400000,
+          "quotation": false
+        }
+      ],
+      "expect": [
+        "forged-jun"
+      ]
+    },
+    {
+      "name": "a quotation in a gap the hand-off did not cover stays",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "own-jan",
+          "at": 1767225600000,
+          "quotation": false
+        },
+        {
+          "id": "own-aug",
+          "at": 1785542400000,
+          "quotation": false
+        },
+        {
+          "id": "shared-oct",
+          "at": 1790812800000,
+          "quotation": true
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "a quotation in the same second as the newest held row goes",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "own-aug",
+          "at": 1785542400400,
+          "quotation": false
+        },
+        {
+          "id": "same-second",
+          "at": 1785542400900,
+          "quotation": true
+        },
+        {
+          "id": "shared-oct",
+          "at": 1790812800000,
+          "quotation": true
+        }
+      ],
+      "expect": [
+        "same-second"
+      ]
+    },
+    {
+      "name": "only quotations before the line: nothing is held, nothing goes",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "shared-jun",
+          "at": 1780272000000,
+          "quotation": true
+        },
+        {
+          "id": "shared-oct",
+          "at": 1790812800000,
+          "quotation": true
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "a row from after the line is not history and moves nothing",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "shared-jun",
+          "at": 1780272000000,
+          "quotation": true
+        },
+        {
+          "id": "live-dec",
+          "at": 1796083200000,
+          "quotation": false
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "a later hand-off moves heldBefore: every quotation up to its newest row goes, the one after stays",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "own-jan",
+          "at": 1767225600000,
+          "quotation": false
+        },
+        {
+          "id": "shared-jun",
+          "at": 1780272000000,
+          "quotation": true
+        },
+        {
+          "id": "own-aug",
+          "at": 1785542400000,
+          "quotation": false
+        },
+        {
+          "id": "shared-sep",
+          "at": 1788220800000,
+          "quotation": true
+        },
+        {
+          "id": "own-oct",
+          "at": 1790812800000,
+          "quotation": false
+        },
+        {
+          "id": "shared-late-oct",
+          "at": 1790899200000,
+          "quotation": true
+        }
+      ],
+      "expect": [
+        "shared-jun",
+        "shared-sep"
+      ]
+    },
+    {
+      "name": "a rejoined device: its share from when it was a newcomer, below every held row, stays after a hand-off",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "shared-dec",
+          "at": 1764547200000,
+          "quotation": true
+        },
+        {
+          "id": "own-jan",
+          "at": 1767225600000,
+          "quotation": false
+        },
+        {
+          "id": "own-mar",
+          "at": 1772323200000,
+          "quotation": false
+        },
+        {
+          "id": "handed-aug",
+          "at": 1785542400000,
+          "quotation": false
+        },
+        {
+          "id": "shared-oct",
+          "at": 1790812800000,
+          "quotation": true
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "a quotation in the same second as the oldest held row goes, one a second below it stays",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "below",
+          "at": 1767225599000,
+          "quotation": true
+        },
+        {
+          "id": "same-second",
+          "at": 1767225600900,
+          "quotation": true
+        },
+        {
+          "id": "own-jan",
+          "at": 1767225600100,
+          "quotation": false
+        },
+        {
+          "id": "handed-aug",
+          "at": 1785542400000,
+          "quotation": false
+        }
+      ],
+      "expect": [
+        "same-second"
+      ]
+    },
+    {
+      "name": "a share filed between an earlier stint and a hand-off goes, the newcomer's share below them stays",
+      "call": "recheck",
+      "line": 1793491200000,
+      "rows": [
+        {
+          "id": "shared-dec",
+          "at": 1764547200000,
+          "quotation": true
+        },
+        {
+          "id": "own-jan",
+          "at": 1767225600000,
+          "quotation": false
+        },
+        {
+          "id": "forged-jun",
+          "at": 1780272000000,
+          "quotation": true
+        },
+        {
+          "id": "handed-aug",
+          "at": 1785542400000,
+          "quotation": false
+        }
+      ],
+      "expect": [
+        "forged-jun"
+      ]
+    }
+  ]
+}

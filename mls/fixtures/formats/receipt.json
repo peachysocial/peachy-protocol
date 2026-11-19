@@ -1,0 +1,528 @@
+{
+  "_about": [
+    "Golden cases for the receipt lane frame and for how a lane of receipts folds into the Read and Delivered marks a client shows.",
+    "Normative: docs/sealed-messages.md §Receipts.",
+    "The reader is never in the payload: it is the MLS sender, read from the decrypted credential.",
+    "Parsing is strict JSON, as for reactions: an unquoted key, a trailing comma or a duplicate key (at any depth, compared after unescaping) makes the payload not a receipt. An unknown extra key is ignored.",
+    "`k: \"lane\"` is the lane mark, owed for a reaction, an edit or a delete: `m` is that frame's envelope id. It parses as a delivered mark with `lane: true`, and a fold never keeps or draws it, even when `m` matches a message. Its own `k` keeps it out of builds before the lane mark, which read only read and delivered and drop any other `k`.",
+    "A delivered mark carrying `l: true` (the JSON boolean; any other value is ignored) is the lane mark as the first builds that sent the lane mark sent it. A reader takes it as a lane mark too; nothing sends it.",
+    "`encode` gives a receipt, the exact keys the wire carries, its `k`, and what parsing it back gives. `parse` gives a wire string and what a reader reads out of it, or null.",
+    "`fold` gives the transcript (`messages`, frame ids in ascending transcript order) and a lane of {sender, wire}, and what a client shows per sender in `draw`: `read` is the latest message in the transcript that any valid read mark of theirs names, and `delivered` the latest that any valid read or delivered mark names (read implies delivered).",
+    "Latest means by transcript position, never by lane order, so a stale mark from another of the reader's devices never moves the mark back. A mark naming a message the transcript does not hold is ignored. A sender with no usable mark is absent from `draw`.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "cases": [
+    {
+      "id": "encode/read",
+      "why": "A read mark.",
+      "call": "encode",
+      "receipt": {
+        "kind": "read",
+        "messageId": "11111111-1111-1111-1111-111111111111"
+      },
+      "keys": [
+        "k",
+        "m",
+        "peachy",
+        "v"
+      ],
+      "k": "read",
+      "expect": {
+        "kind": "read",
+        "messageId": "11111111-1111-1111-1111-111111111111"
+      }
+    },
+    {
+      "id": "encode/delivered",
+      "why": "A delivery mark.",
+      "call": "encode",
+      "receipt": {
+        "kind": "delivered",
+        "messageId": "22222222-2222-2222-2222-222222222222"
+      },
+      "keys": [
+        "k",
+        "m",
+        "peachy",
+        "v"
+      ],
+      "k": "delivered",
+      "expect": {
+        "kind": "delivered",
+        "messageId": "22222222-2222-2222-2222-222222222222"
+      }
+    },
+    {
+      "id": "encode/lane",
+      "why": "The mark owed for a reaction, an edit or a delete goes as k lane, and never carries `l`.",
+      "call": "encode",
+      "receipt": {
+        "kind": "delivered",
+        "messageId": "33333333-3333-3333-3333-333333333333",
+        "lane": true
+      },
+      "keys": [
+        "k",
+        "m",
+        "peachy",
+        "v"
+      ],
+      "k": "lane",
+      "expect": {
+        "kind": "delivered",
+        "messageId": "33333333-3333-3333-3333-333333333333",
+        "lane": true
+      }
+    },
+    {
+      "id": "parse/lane",
+      "why": "A lane mark reads as one.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"lane\",\"m\":\"33333333-3333-3333-3333-333333333333\"}",
+      "expect": {
+        "kind": "delivered",
+        "messageId": "33333333-3333-3333-3333-333333333333",
+        "lane": true
+      }
+    },
+    {
+      "id": "parse/lane-with-l-false",
+      "why": "k lane is a lane mark whatever `l` says.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"lane\",\"m\":\"abc\",\"l\":false}",
+      "expect": {
+        "kind": "delivered",
+        "messageId": "abc",
+        "lane": true
+      }
+    },
+    {
+      "id": "parse/lane-case",
+      "why": "The lane kind is compared exactly, as the others are.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"Lane\",\"m\":\"abc\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/lane-as-l",
+      "why": "The lane mark as the first builds that sent the lane mark sent it, a delivered mark with `l` true, still reads as one.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"33333333-3333-3333-3333-333333333333\",\"l\":true}",
+      "expect": {
+        "kind": "delivered",
+        "messageId": "33333333-3333-3333-3333-333333333333",
+        "lane": true
+      }
+    },
+    {
+      "id": "parse/lane-not-true",
+      "why": "Only the JSON boolean true sets `l`; anything else is an unknown value, ignored.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"abc\",\"l\":1}",
+      "expect": {
+        "kind": "delivered",
+        "messageId": "abc"
+      }
+    },
+    {
+      "id": "parse/read",
+      "why": "The canonical read wire.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"11111111-1111-1111-1111-111111111111\"}",
+      "expect": {
+        "kind": "read",
+        "messageId": "11111111-1111-1111-1111-111111111111"
+      }
+    },
+    {
+      "id": "parse/delivered-reordered",
+      "why": "Key order carries no meaning.",
+      "call": "parse",
+      "wire": "{\"m\":\"abc\",\"k\":\"delivered\",\"v\":1,\"peachy\":\"receipt\"}",
+      "expect": {
+        "kind": "delivered",
+        "messageId": "abc"
+      }
+    },
+    {
+      "id": "parse/extra-key",
+      "why": "An unknown extra key is ignored, so a later version can add one.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"abc\",\"t\":5}",
+      "expect": {
+        "kind": "read",
+        "messageId": "abc"
+      }
+    },
+    {
+      "id": "parse/unknown-kind",
+      "why": "Only read, delivered and lane are receipts. Builds before the lane mark drop lane here too.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"seen\",\"m\":\"abc\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/kind-case",
+      "why": "Kinds are compared exactly.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"Read\",\"m\":\"abc\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/kind-not-string",
+      "why": "k must be a string.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":1,\"m\":\"abc\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/future-version",
+      "why": "A higher version is refused, never guessed at.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":2,\"k\":\"read\",\"m\":\"abc\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/version-string",
+      "why": "v must be the JSON number 1.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":\"1\",\"k\":\"read\",\"m\":\"abc\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/no-message",
+      "why": "A receipt names a message.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/empty-message",
+      "why": "An empty id names nothing.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/message-not-string",
+      "why": "m must be a string.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":7}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-kind",
+      "why": "Two k keys: a first-wins and a last-wins reader would disagree, so nobody reads it.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"k\":\"read\",\"m\":\"abc\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/duplicate-escaped",
+      "why": "Duplicates are compared after unescaping.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"abc\",\"\\u006d\":\"def\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/reaction",
+      "why": "A sealed reaction shares the lane and is not a receipt.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"abc\",\"e\":\"👍\"}",
+      "expect": null
+    },
+    {
+      "id": "parse/junk",
+      "why": "Not JSON at all.",
+      "call": "parse",
+      "wire": "hello",
+      "expect": null
+    },
+    {
+      "id": "parse/array",
+      "why": "A top-level array is not a receipt.",
+      "call": "parse",
+      "wire": "[\"receipt\"]",
+      "expect": null
+    },
+    {
+      "id": "parse/trailing-comma",
+      "why": "Strict JSON.",
+      "call": "parse",
+      "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"abc\",}",
+      "expect": null
+    },
+    {
+      "id": "fold/one-read",
+      "why": "A read mark covers its message and is also the delivery mark.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2",
+        "m3"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m2\"}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": "m2",
+          "delivered": "m2"
+        }
+      }
+    },
+    {
+      "id": "fold/delivered-ahead",
+      "why": "Delivered can run ahead of read.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2",
+        "m3"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m1\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"m3\"}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": "m1",
+          "delivered": "m3"
+        }
+      }
+    },
+    {
+      "id": "fold/only-delivered",
+      "why": "No read mark yet.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"m2\"}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": null,
+          "delivered": "m2"
+        }
+      }
+    },
+    {
+      "id": "fold/stale-device",
+      "why": "A second device's older mark, later on the lane, never moves the mark back.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2",
+        "m3"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m3\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m1\"}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": "m3",
+          "delivered": "m3"
+        }
+      }
+    },
+    {
+      "id": "fold/read-beats-older-delivered",
+      "why": "Delivered is the later of the two marks.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2",
+        "m3"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"m1\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m3\"}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": "m3",
+          "delivered": "m3"
+        }
+      }
+    },
+    {
+      "id": "fold/unknown-message",
+      "why": "A mark naming a message this transcript does not hold is ignored; the known one stands.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m1\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"elsewhere\"}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": "m1",
+          "delivered": "m1"
+        }
+      }
+    },
+    {
+      "id": "fold/only-unknown",
+      "why": "A sender with no usable mark is absent.",
+      "call": "fold",
+      "messages": [
+        "m1"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"elsewhere\"}"
+        }
+      ],
+      "draw": {}
+    },
+    {
+      "id": "fold/two-readers",
+      "why": "Each sender is folded on their own.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2",
+        "m3"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m3\"}"
+        },
+        {
+          "sender": "cat",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"m2\"}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": "m3",
+          "delivered": "m3"
+        },
+        "cat": {
+          "read": null,
+          "delivered": "m2"
+        }
+      }
+    },
+    {
+      "id": "fold/invalid-skipped",
+      "why": "Invalid lane entries and other lane payloads are skipped.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"read\",\"m\":\"m1\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":2,\"k\":\"read\",\"m\":\"m2\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"react\",\"v\":1,\"m\":\"m2\",\"e\":\"👍\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "not json"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": "m1",
+          "delivered": "m1"
+        }
+      }
+    },
+    {
+      "id": "fold/lane-mark-never-drawn",
+      "why": "A lane mark names no message, even when its id matches one, in either shape: the older real mark stands.",
+      "call": "fold",
+      "messages": [
+        "m1",
+        "m2",
+        "m3"
+      ],
+      "lane": [
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"m1\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"lane\",\"m\":\"m2\"}"
+        },
+        {
+          "sender": "bob",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"m3\",\"l\":true}"
+        },
+        {
+          "sender": "cat",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"lane\",\"m\":\"e9\"}"
+        },
+        {
+          "sender": "dee",
+          "wire": "{\"peachy\":\"receipt\",\"v\":1,\"k\":\"delivered\",\"m\":\"e8\",\"l\":true}"
+        }
+      ],
+      "draw": {
+        "bob": {
+          "read": null,
+          "delivered": "m1"
+        }
+      }
+    },
+    {
+      "id": "fold/empty",
+      "why": "No lane, nothing drawn.",
+      "call": "fold",
+      "messages": [
+        "m1"
+      ],
+      "lane": [],
+      "draw": {}
+    }
+  ]
+}

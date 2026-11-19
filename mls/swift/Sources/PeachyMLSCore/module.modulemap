@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: MIT
+// The C door, as a clang module.
+//
+// `include/peachy_mls.h` is a SYMLINK to `mls/cabi/include/peachy_mls.h` — the
+// one cbindgen generates and `mls/cabi/tests/header.rs` holds against the Rust
+// source. A copy would be a second header to keep honest, and the day it fell
+// behind, Swift would be calling an ABI that no longer exists with no compiler
+// anywhere in a position to notice.
+//
+// No `link` directive here: which archive this module resolves against is the
+// consumer's decision, and there are two of them. `swift test` links the host
+// build through the `-L` in Package.swift; an app links the slice
+// `PeachyMLSCore.xcframework` picked for its platform. Naming a library here
+// would force both to be spelled the same way.
+//
+// `Security` is a different matter: every archive is SQLCipher built over
+// CommonCrypto on Apple (mls/core/Cargo.toml), which draws its randomness from
+// `SecRandomCopyBytes`, so whichever archive is linked needs the framework.
+module PeachyMLSCore {
+  header "include/peachy_mls.h"
+  link framework "Security"
+  export *
+}

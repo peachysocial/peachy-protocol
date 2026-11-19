@@ -1,0 +1,53 @@
+(* SPDX-License-Identifier: MIT *)
+(* pcs_update_by_compromised.pv: post-compromise security when the
+   COMPROMISED device is the one that self-updates.
+
+   Scenario: A and B share epoch 1. The attacker copies A's group state (its
+   epoch-1 secret and its leaf HPKE key) but not its signature key, and stays
+   passive. A then self-updates: a fresh leaf, and a path secret sealed to B's
+   leaf. The call continues in epoch 2.
+
+   Assumption: the signature key is NOT taken. Peachy's leaf rotation keeps
+   the device's Ed25519 key (docs/mls-core.md §Periodic leaf rotation), so an
+   attacker holding it can sign commits of its own until the device is
+   revoked; no MLS update heals that.
+
+   Expected: epoch 2 is secret again. *)
+
+free es1: key [private].
+free gid: bitstring.
+free cid: bitstring.
+free leafA1, leafB1, leafA2: hskey [private].
+free sigA, sigB: sskey [private].
+free cs2: key [private].
+free mA2, mB2: bitstring [private].
+
+query attacker(mA2).
+query attacker(mB2).
+query attacker(next_epoch(init_secret(es1), cs2)).
+
+(* Sanity: expected FALSE (reachable). *)
+query es: key, m: bitstring; event(AcceptFrame(LEAF_B, E2, es, cid, LEAF_A, m)).
+
+process
+  out(net, (hpk(leafA1), hpk(leafB1), spk(sigA), spk(sigB)));
+  out(net, exporter(es1, L_SEALED_SENDER, gid));
+  out(net, (es1, leafA1));
+  (
+      (
+        let es2 = next_epoch(init_secret(es1), cs2) in
+        let body = (E2, hpke_seal(hpk(leafB1), cs2), hpk(leafA2)) in
+        out(net, (body, sign(sigA, body)));
+        FrameSender(E2, es2, cid, LEAF_A, mA2)
+      )
+    | (
+        in(net, (body: bitstring, s: bitstring));
+        let (=body) = checksign(spk(sigA), s) in
+        let (=E2, ctB: bitstring, newA: hpkey) = body in
+        let es2b = next_epoch(init_secret(es1), hpke_open(leafB1, ctB)) in
+        (
+            FrameSender(E2, es2b, cid, LEAF_B, mB2)
+          | !FrameReceiver(LEAF_B, E2, es2b, cid, LEAF_A)
+        )
+      )
+  )

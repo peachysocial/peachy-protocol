@@ -1,0 +1,312 @@
+{
+  "_about": [
+    "Golden cases for which self-notes a device acts on: whose signature counts, which notes act, and that a note acts once.",
+    "Normative: docs/sealed-messages.md §Signed notes.",
+    "The sealing and signing of a note are pinned in mls/fixtures/account-store.json (note_sender, note_open_signed); this table pins the decisions around them.",
+    "`seenKeepMs` is how long a note id acted on is remembered.",
+    "`senders`: `self` is the receiving device, `devices` its account's device list, `sender` the note's claimed sender. A device row is {id, revoked, accountCertified, approvalState, signingKeyHex}; an omitted field reads as revoked false, accountCertified true, approvalState \"approved\" and signingKeyHex 32 bytes of 0xaa. `expect` is the signing key the note is opened under (hex), or null: the note is dropped.",
+    "`verdicts`: whether a note that opened acts. `note` is {kind, sender, asker}: `sender` \"\" is an unsigned note, which never acts, and `asker` is a `history` note's `d`. `state` is {handoffWanted}.",
+    "`seen`: `ledger` maps a note id acted on (hex) to when it is forgotten (epoch milliseconds); `expect` is true when the note with `noteIdHex` at `nowMs` was already acted on and must not act again.",
+    "`answers`: what a device sends a sibling it hands history to (one that asked, by a signed or unsigned note, or one it owes a hand-off), by the `OwnDeviceVerdict` name that `check_own_device_key` gives for that sibling's row (its id, signing key, `approved_by_device_id` and `approval_signature`): `history` is the hand-off, `none` the nothing-to-send note. A verdict the reader does not know is `none`. The hand-off a device sends as it approves another skips this check: it has just signed that approval.",
+    "To replay: run each case through your own implementation of the format and compare the result with the case's expectation, field by field."
+  ],
+  "seenKeepMs": 605400000,
+  "senders": [
+    {
+      "id": "a-live-certified-sibling",
+      "self": "laptop",
+      "devices": [
+        {
+          "id": "laptop"
+        },
+        {
+          "id": "phone",
+          "signingKeyHex": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "sender": "phone",
+      "expect": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "id": "a-removed-device",
+      "self": "laptop",
+      "devices": [
+        {
+          "id": "laptop"
+        },
+        {
+          "id": "phone"
+        },
+        {
+          "id": "old-tablet",
+          "revoked": true
+        }
+      ],
+      "sender": "old-tablet",
+      "expect": null
+    },
+    {
+      "id": "a-device-the-account-key-never-certified",
+      "self": "laptop",
+      "devices": [
+        {
+          "id": "laptop"
+        },
+        {
+          "id": "stranger",
+          "accountCertified": false
+        }
+      ],
+      "sender": "stranger",
+      "expect": null
+    },
+    {
+      "id": "a-device-still-waiting-for-approval",
+      "self": "laptop",
+      "devices": [
+        {
+          "id": "laptop"
+        },
+        {
+          "id": "new-phone",
+          "approvalState": "pending"
+        }
+      ],
+      "sender": "new-phone",
+      "expect": null
+    },
+    {
+      "id": "this-device-itself",
+      "self": "laptop",
+      "devices": [
+        {
+          "id": "laptop"
+        },
+        {
+          "id": "phone"
+        }
+      ],
+      "sender": "laptop",
+      "expect": null
+    },
+    {
+      "id": "a-device-not-in-the-list",
+      "self": "laptop",
+      "devices": [
+        {
+          "id": "laptop"
+        },
+        {
+          "id": "phone"
+        }
+      ],
+      "sender": "somebody-else",
+      "expect": null
+    },
+    {
+      "id": "a-row-with-no-key",
+      "self": "laptop",
+      "devices": [
+        {
+          "id": "laptop"
+        },
+        {
+          "id": "phone",
+          "signingKeyHex": ""
+        }
+      ],
+      "sender": "phone",
+      "expect": null
+    }
+  ],
+  "verdicts": [
+    {
+      "id": "signed-read",
+      "note": {
+        "kind": "read",
+        "sender": "phone"
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": true
+    },
+    {
+      "id": "signed-receipts",
+      "note": {
+        "kind": "receipts",
+        "sender": "phone"
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": true
+    },
+    {
+      "id": "signed-hand-off-while-waiting",
+      "note": {
+        "kind": "transfer",
+        "sender": "phone"
+      },
+      "state": {
+        "handoffWanted": true
+      },
+      "expect": true
+    },
+    {
+      "id": "signed-hand-off-not-waited-for",
+      "note": {
+        "kind": "transfer",
+        "sender": "phone"
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": false
+    },
+    {
+      "id": "signed-nothing-to-send-not-waited-for",
+      "note": {
+        "kind": "none",
+        "sender": "phone"
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": false
+    },
+    {
+      "id": "signed-nothing-to-send-while-waiting",
+      "note": {
+        "kind": "none",
+        "sender": "phone"
+      },
+      "state": {
+        "handoffWanted": true
+      },
+      "expect": true
+    },
+    {
+      "id": "an-ask-from-the-device-it-names",
+      "note": {
+        "kind": "history",
+        "sender": "phone",
+        "asker": "phone"
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": true
+    },
+    {
+      "id": "an-ask-naming-another-device",
+      "note": {
+        "kind": "history",
+        "sender": "phone",
+        "asker": "old-tablet"
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": false
+    },
+    {
+      "id": "unsigned-hand-off",
+      "note": {
+        "kind": "transfer",
+        "sender": ""
+      },
+      "state": {
+        "handoffWanted": true
+      },
+      "expect": false
+    },
+    {
+      "id": "unsigned-read",
+      "note": {
+        "kind": "read",
+        "sender": ""
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": false
+    },
+    {
+      "id": "unsigned-ask",
+      "note": {
+        "kind": "history",
+        "sender": "",
+        "asker": "phone"
+      },
+      "state": {
+        "handoffWanted": false
+      },
+      "expect": false
+    }
+  ],
+  "answers": [
+    {
+      "id": "a-device-already-known",
+      "verdict": "known",
+      "expect": "history"
+    },
+    {
+      "id": "a-device-a-trusted-sibling-approved",
+      "verdict": "approved",
+      "expect": "history"
+    },
+    {
+      "id": "a-device-no-trusted-sibling-vouches-for",
+      "verdict": "unanchored",
+      "expect": "none"
+    },
+    {
+      "id": "an-approval-that-does-not-verify",
+      "verdict": "bad_approval",
+      "expect": "none"
+    },
+    {
+      "id": "this-device-itself",
+      "verdict": "not_own_device",
+      "expect": "none"
+    },
+    {
+      "id": "a-row-that-is-not-well-formed",
+      "verdict": "credential_rejected",
+      "expect": "none"
+    },
+    {
+      "id": "a-verdict-this-build-does-not-know",
+      "verdict": "something-newer",
+      "expect": "none"
+    }
+  ],
+  "seen": [
+    {
+      "id": "never-seen",
+      "ledger": {},
+      "noteIdHex": "42424242424242424242424242424242",
+      "nowMs": 1790000000000,
+      "expect": false
+    },
+    {
+      "id": "seen-and-still-remembered",
+      "ledger": {
+        "42424242424242424242424242424242": 1790605400000
+      },
+      "noteIdHex": "42424242424242424242424242424242",
+      "nowMs": 1790605399999,
+      "expect": true
+    },
+    {
+      "id": "remembered-until-the-window-closes",
+      "ledger": {
+        "42424242424242424242424242424242": 1790605400000
+      },
+      "noteIdHex": "42424242424242424242424242424242",
+      "nowMs": 1790605400000,
+      "expect": false
+    }
+  ]
+}

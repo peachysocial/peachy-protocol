@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: MIT
+//
+// Store domains: what a state_changed event names.
+//
+// Generated from Peachy's schema by the release exporter; edits here are
+// overwritten. Field numbers, names and types match the service exactly.
+// Fields and enum values that are not part of the public protocol are left
+// out and their numbers reserved: a reader built from this file skips them as
+// unknown fields.
+
+syntax = "proto3";
+
+package peachy.v1;
+
+// What a state_changed event names. Values outside this list belong to surfaces
+// that are not part of this protocol release; ignore them.
+enum StateDomain {
+  reserved 2 to 4, 6 to 13, 15 to 16, 19, 21, 24;
+  STATE_DOMAIN_UNSPECIFIED = 0;
+
+  // The caller's own profile (GetMe).
+  STATE_DOMAIN_PROFILE = 1;
+
+  // Sessions and devices (ListSessions, ListDevices).
+  STATE_DOMAIN_SESSIONS = 5;
+
+  // This account's own MLS state moved outside the mailbox: a device's KeyPackage
+  // pool ran low (KeyPackagePoolStatus), or one of its devices committed with a
+  // session. Not versioned.
+  STATE_DOMAIN_MLS = 14;
+
+  // Another device wrote the account store (ReadStore).
+  STATE_DOMAIN_ACCOUNT_STORE = 17;
+
+  // This account's mailbox has something new (FetchMailbox). Not versioned.
+  STATE_DOMAIN_MAILBOX = 18;
+
+  // Someone this account holds changed their public row (GetUsers). Co-members of
+  // sealed conversations are unknown to the server, so also refresh people when
+  // coming back to the foreground.
+  STATE_DOMAIN_PEOPLE = 20;
+}
